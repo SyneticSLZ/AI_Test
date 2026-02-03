@@ -1693,7 +1693,363 @@ app.get('/api/data-sources', (req, res) => {
     note: 'All data is from CMS public use files. See limitations for each source.',
   });
 });
+// Add to server.js
+/**
+ * GET /api/physicians/:npi/affiliations
+ * Get comprehensive affiliation data from multiple sources:
+ * - NPPES: Practice locations, taxonomies, basic info
+ * - CMS Clinician Data: Hospital affiliations, group practices
+ */
+app.get('/api/physicians/:npi/affiliations', async (req, res) => {
+  try {
+    const { npi } = req.params;
+    console.log(`[Affiliations] Fetching data for NPI: ${npi}`);
+    
+    // Fetch from multiple sources in parallel
+    const [nppesData, clinicianData] = await Promise.all([
+      fetchNPPESData(npi),
+      fetchClinicianData(npi),
+    ]);
+    
+    // Merge and deduplicate data
+    const affiliations = mergeAffiliationData(nppesData, clinicianData);
+    
+    res.json({
+      success: true,
+      npi,
+      affiliations,
+      dataSources: {
+        nppes: {
+          name: 'NPPES NPI Registry',
+          url: 'https://npiregistry.cms.hhs.gov/',
+          lastUpdated: nppesData?.basic?.last_updated || null,
+        },
+        clinician: {
+          name: 'CMS Clinician Data',
+          url: 'https://data.cms.gov/provider-data/dataset/mj5m-pzi6',
+          description: 'Hospital affiliations and group practices from Medicare Provider Enrollment',
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[Affiliations] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      npi: req.params.npi,
+    });
+  }
+});
 
+/**
+ * Fetch provider data from NPPES NPI Registry
+ */
+async function fetchNPPESData(npi) {
+  try {
+    const response = await fetch(
+      `https://npiregistry.cms.hhs.gov/api/?number=${npi}&version=2.1`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+    
+    if (!response.ok) {
+      console.warn(`[NPPES] API returned ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (!data.results || data.results.length === 0) {
+      return null;
+    }
+    
+    return data.results[0];
+  } catch (error) {
+    console.error('[NPPES] Fetch error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch clinician data from CMS Clinician Data API
+ * This includes hospital affiliations and group practice info
+ */
+async function fetchClinicianData(npi) {
+  try {
+    // CMS Clinician Data API (includes hospital affiliations)
+    const clinicianUrl = `https://data.cms.gov/provider-data/api/1/datastore/query/mj5m-pzi6/0?conditions[0][property]=npi&conditions[0][value]=${npi}&conditions[0][operator]=%3D&limit=10`;
+    
+    const response = await fetch(clinicianUrl, {
+      headers: { 'Accept': 'application/json' }
+    });
+    
+    if (!response.ok) {
+      console.warn(`[CMS Clinician] API returned ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.results || [];
+  } catch (error) {
+    console.error('[CMS Clinician] Fetch error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Merge affiliation data from multiple sources
+ */
+function mergeAffiliationData(nppes, clinicianRecords) {
+  const result = {
+    organizationName: null,
+    groupPractices: [],
+    practiceLocations: [],
+    hospitalAffiliations: [],
+    specialties: [],
+    boardCertifications: [],
+    medicalSchool: null,
+    graduationYear: null,
+    enumerationDate: null,
+    lastUpdated: null,
+    status: null,
+    gender: null,
+    soleProprietor: false,
+  };
+  
+  // Process NPPES data
+  if (nppes) {
+    const basic = nppes.basic || {};
+    const addresses = nppes.addresses || [];
+    const taxonomies = nppes.taxonomies || [];
+    
+    result.organizationName = basic.organization_name || basic.authorized_official_organization_name || null;
+    result.enumerationDate = basic.enumeration_date;
+    result.lastUpdated = basic.last_updated;
+    result.status = basic.status;
+    result.gender = basic.gender;
+    result.soleProprietor = basic.sole_proprietor === 'YES';
+    
+    // Practice locations
+    result.practiceLocations = addresses.map(addr => ({
+      type: addr.address_purpose === 'MAILING' ? 'Mailing' : 'Practice',
+      address1: addr.address_1,
+      address2: addr.address_2 || null,
+      city: addr.city,
+      state: addr.state,
+      zip: addr.postal_code,
+      phone: addr.telephone_number,
+      fax: addr.fax_number,
+      country: addr.country_name || 'US',
+    }));
+    
+    // Taxonomies/Specialties
+    result.specialties = taxonomies.map(t => ({
+      code: t.code,
+      description: t.desc,
+      primary: t.primary === true || t.primary === 'Y',
+      state: t.state,
+      license: t.license,
+      source: 'NPPES',
+    }));
+  }
+  
+  // Process CMS Clinician data (contains hospital affiliations!)
+  if (clinicianRecords && clinicianRecords.length > 0) {
+    const seenHospitals = new Set();
+    const seenGroups = new Set();
+    
+    for (const record of clinicianRecords) {
+      // Hospital affiliations - CMS has up to 5 per record
+      for (let i = 1; i <= 5; i++) {
+        const hospCcn = record[`hosp_afl_${i}`];
+        const hospName = record[`hosp_afl_lbn_${i}`];
+        
+        if (hospCcn && hospName && !seenHospitals.has(hospCcn)) {
+          seenHospitals.add(hospCcn);
+          result.hospitalAffiliations.push({
+            ccn: hospCcn,
+            name: formatHospitalName(hospName),
+            source: 'CMS Clinician Data',
+          });
+        }
+      }
+      
+      // Group practice info
+      const groupPacId = record.org_pac_id;
+      const groupName = record.org_nm;
+      
+      if (groupPacId && groupName && !seenGroups.has(groupPacId)) {
+        seenGroups.add(groupPacId);
+        result.groupPractices.push({
+          pacId: groupPacId,
+          name: formatOrgName(groupName),
+          address: record.adr_ln_1,
+          city: record.cty,
+          state: record.st,
+          zip: record.zip,
+          phone: record.phn_numbr,
+        });
+      }
+      
+      // Medical school
+      if (!result.medicalSchool && record.med_sch) {
+        result.medicalSchool = formatSchoolName(record.med_sch);
+        result.graduationYear = record.grd_yr;
+      }
+      
+      // Primary specialty from CMS
+      if (record.pri_spec) {
+        const existingPrimary = result.specialties.find(s => s.primary && s.source === 'CMS');
+        if (!existingPrimary) {
+          result.specialties.unshift({
+            code: null,
+            description: record.pri_spec,
+            primary: true,
+            state: record.st,
+            license: null,
+            source: 'CMS',
+          });
+        }
+      }
+      
+      // Secondary specialties
+      if (record.sec_spec_1) {
+        result.specialties.push({
+          code: null,
+          description: record.sec_spec_1,
+          primary: false,
+          source: 'CMS',
+        });
+      }
+      if (record.sec_spec_2) {
+        result.specialties.push({
+          code: null,
+          description: record.sec_spec_2,
+          primary: false,
+          source: 'CMS',
+        });
+      }
+    }
+  }
+  
+  // Use first group practice as org name if not set
+  if (!result.organizationName && result.groupPractices.length > 0) {
+    result.organizationName = result.groupPractices[0].name;
+  }
+  
+  return result;
+}
+
+/**
+ * Format hospital name (title case, clean up)
+ */
+function formatHospitalName(name) {
+  if (!name) return name;
+  return name
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\bLlc\b/g, 'LLC')
+    .replace(/\bInc\b/g, 'Inc.')
+    .trim();
+}
+
+/**
+ * Format organization name
+ */
+function formatOrgName(name) {
+  if (!name) return name;
+  return name
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\bLlc\b/g, 'LLC')
+    .replace(/\bPllc\b/g, 'PLLC')
+    .replace(/\bPc\b/g, 'PC')
+    .replace(/\bMd\b/g, 'MD')
+    .replace(/\bPa\b/g, 'PA')
+    .trim();
+}
+
+/**
+ * Format medical school name
+ */
+function formatSchoolName(name) {
+  if (!name) return name;
+  return name
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\bOf\b/g, 'of')
+    .replace(/\bThe\b/g, 'the')
+    .replace(/\bAnd\b/g, 'and')
+    .trim();
+}
+// app.get('/api/physicians/:npi/affiliations', async (req, res) => {
+//   try {
+//     const { npi } = req.params;
+    
+//     // Query NPPES API for provider details including affiliations
+//     const nppes = await fetch(`https://npiregistry.cms.hhs.gov/api/?number=${npi}&version=2.1`);
+//     const data = await nppes.json();
+    
+//     if (!data.results || data.results.length === 0) {
+//       return res.json({ success: true, affiliations: [] });
+//     }
+    
+//     const provider = data.results[0];
+//     const basic = provider.basic || {};
+//     const addresses = provider.addresses || [];
+//     const taxonomies = provider.taxonomies || [];
+//     const identifiers = provider.identifiers || [];
+    
+//     // Extract organization name if individual
+//     const orgName = basic.organization_name || basic.authorized_official_organization_name || null;
+    
+//     // Practice locations
+//     const practiceLocations = addresses.map(addr => ({
+//       type: addr.address_purpose === 'MAILING' ? 'Mailing' : 'Practice',
+//       address: `${addr.address_1}${addr.address_2 ? ', ' + addr.address_2 : ''}`,
+//       city: addr.city,
+//       state: addr.state,
+//       zip: addr.postal_code,
+//       phone: addr.telephone_number,
+//       fax: addr.fax_number,
+//     }));
+    
+//     // Taxonomy/specialty details
+//     const specialties = taxonomies.map(t => ({
+//       code: t.code,
+//       description: t.desc,
+//       primary: t.primary,
+//       state: t.state,
+//       license: t.license,
+//     }));
+    
+//     // Hospital affiliations from identifiers (if available)
+//     const hospitalAffiliations = identifiers
+//       .filter(id => id.identifier_type === 'HOSPITAL')
+//       .map(id => ({
+//         name: id.identifier_name || id.issuer,
+//         identifier: id.identifier,
+//         state: id.state,
+//       }));
+    
+//     res.json({
+//       success: true,
+//       affiliations: {
+//         organizationName: orgName,
+//         practiceLocations,
+//         specialties,
+//         hospitalAffiliations,
+//         enumerationDate: basic.enumeration_date,
+//         lastUpdated: basic.last_updated,
+//         status: basic.status,
+//         sole_proprietor: basic.sole_proprietor,
+//         gender: basic.gender,
+//       }
+//     });
+//   } catch (err) {
+//     console.error('NPPES API error:', err);
+//     res.json({ success: false, error: err.message });
+//   }
+// });
 // ============================================
 // EXPORT ROUTES
 // ============================================

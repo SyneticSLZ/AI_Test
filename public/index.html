@@ -420,13 +420,158 @@
 .confidence-medium { color: #d97706; }
 .confidence-low { color: #dc2626; }
 
-/* AI Loading */
-.ai-step { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; opacity: 0.4; transition: opacity 0.3s; }
-.ai-step.active { opacity: 1; }
-.ai-step.done { opacity: 0.6; }
-.ai-step .icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f3f4f6; }
-.ai-step.active .icon { background: linear-gradient(135deg, #e8a0c0, #b0a8d8); animation: pulse 1.5s infinite; }
-.ai-step.done .icon { background: #10b981; color: white; }
+/* Professional Loading States */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  min-height: 280px;
+}
+
+/* Refined spinner */
+.loader-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f4f6;
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: loaderSpin 0.8s linear infinite;
+}
+
+@keyframes loaderSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Step indicators */
+.loader-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.loader-step {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #f9fafb;
+  color: #9ca3af;
+  transition: all 0.3s ease;
+}
+
+.loader-step.active {
+  background: linear-gradient(135deg, #ede9fe, #e0e7ff);
+  color: #6d28d9;
+}
+
+.loader-step.done {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.loader-step-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader-step.active .loader-step-icon {
+  animation: stepPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes stepPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Progress track */
+.loader-progress-track {
+  width: 200px;
+  height: 4px;
+  background: #f3f4f6;
+  border-radius: 2px;
+  margin-top: 1rem;
+  overflow: hidden;
+}
+
+.loader-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6 0%, #a855f7 50%, #8b5cf6 100%);
+  background-size: 200% 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  animation: progressShine 1.5s ease-in-out infinite;
+}
+
+@keyframes progressShine {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Status text */
+.loader-status {
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Table skeleton rows */
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  gap: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.skeleton-row:last-child {
+  border-bottom: none;
+}
+
+.skeleton-cell {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.skeleton-name {
+  width: 140px;
+  height: 14px;
+}
+
+.skeleton-subtitle {
+  width: 100px;
+  height: 10px;
+  margin-top: 6px;
+}
+
+.skeleton-badge {
+  width: 70px;
+  height: 22px;
+  border-radius: 4px;
+}
+
+.skeleton-number {
+  width: 50px;
+  height: 14px;
+}
   /* Interactive Filters */
 .filter-panel {
   background: white;
@@ -648,13 +793,15 @@
   <!-- Floating Icon Sidebar -->
   <aside id="iconSidebar" class="fixed left-4 top-1/2 -translate-y-1/2 z-50 floating-sidebar rounded-2xl py-4 px-2 flex flex-col items-center" style="height: auto;">
     <!-- Logo at top -->
-    <div class="mb-4 pb-3 border-b border-black/5 w-full flex justify-center">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 via-purple-50 to-purple-100 flex items-center justify-center shadow-sm">
-        <svg class="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-        </svg>
-      </div>
-    </div>
+     <div class="mb-4 pb-3 border-b border-black/5 w-full flex justify-center">
+  <div class="w-10 h-10 rounded-xl bg-gradient-to-r from-emerald-100 to-cyan-100 flex items-center justify-center shadow-sm">
+    <img
+      src="./leaf.png"
+      alt="Icon"
+      class="w-6 h-6 object-contain"
+    />
+  </div>
+</div>
     
     <!-- Center icons -->
     <div class="flex-1 flex flex-col items-center gap-1.5">
@@ -667,17 +814,17 @@
       <button onclick="toggleMapView()" id="mapSidebarBtn" class="icon-btn hidden" title="Map View">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
       </button>
-      <button class="icon-btn" title="Settings">
+      <!-- <button class="icon-btn" title="Settings">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-      </button>
+      </button> -->
     </div>
     
     <!-- Logout at bottom -->
-    <div class="mt-3 pt-3 border-t border-black/5 w-full flex justify-center">
-      <button class="icon-btn" title="Logout">
+    <!-- <div class="mt-3 pt-3 border-t border-black/5 w-full flex justify-center"> -->
+      <!-- <button class="icon-btn" title="Logout">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-      </button>
-    </div>
+      </button> -->
+    <!-- </div> -->
   </aside>
   
 <div class="relative z-10 h-screen flex flex-col pl-20 overflow-hidden">
@@ -894,7 +1041,7 @@
     
 
   <!-- Top Navbar -->
-  <header class="flex-shrink-0 bg-white border-b border-gray-200">
+  <header class="hidden flex-shrink-0 bg-white border-b border-gray-200">
     <div class="px-6 h-14 flex items-center justify-between">
       <!-- Left: Logo + Brand -->
       <div class="flex items-center gap-3">
@@ -968,21 +1115,7 @@
             <option value="Tot_Srvcs">Services ↓</option>
             <option value="Bene_Avg_Risk_Scre">Risk Score ↓</option>
           </select>
-          
-          <select id="yearSelect" onchange="updateYear()" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 cursor-pointer hover:border-gray-300 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-            <option value="2021">2021</option>
-          </select>
-          
-          <div class="w-px h-6 bg-gray-200 mx-1"></div>
-          
-          <button onclick="toggleCompareMode()" id="compareModeBtn" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
-            <span id="compareModeText">Compare</span>
-          </button>
-          
-<!-- Filters Dropdown -->
+          <!-- Filters Dropdown -->
 <div class="relative">
   <button onclick="toggleFiltersDropdown()" id="filtersDropdownBtn" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
@@ -1072,6 +1205,28 @@
   </div>
 </div>
 </div>
+          <select id="yearSelect" onchange="updateYear()" class="hidden h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 cursor-pointer hover:border-gray-300 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+          </select>
+          
+          
+          <div class="w-px h-6 bg-gray-200 mx-1"></div>
+          
+          <button onclick="toggleCompareMode()" id="compareModeBtn" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+            <span id="compareModeText">Compare</span>
+          </button>
+
+           <button onclick="toggleMapView()"id="mapToggleBtn" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+            <span id="compareModeText">View on Map</span>
+          </button>
+
+            
+          
+
         </div>
         
         <!-- Right: Pagination -->
@@ -1139,7 +1294,7 @@
         
         <!-- Profile Panel - LARGER -->
 <!-- Profile Side Panel -->
-<aside id="sidePanel" class="slide-panel hidden fixed top-0 right-0 h-full w-[460px] p-6 z-50">
+<aside id="sidePanel" class="slide-panel hidden fixed top-0 right-0 h-full w-[660px] p-6 z-50">
   <div class="h-full bg-white rounded-2xl shadow-xl border border-gray-200 flex flex-col overflow-hidden">
     
     <!-- Header -->
@@ -1156,12 +1311,14 @@
       </div>
       
       <!-- Profile Tabs -->
-      <div class="flex gap-1 mt-4 p-1 bg-gray-100 rounded-xl">
-        <button onclick="switchProfileTab('overview')" id="profile-tab-overview" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg bg-white shadow-sm text-purple-700 transition-all">Overview</button>
-        <button onclick="switchProfileTab('comorbidities')" id="profile-tab-comorbidities" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Comorbidities</button>
-        <button onclick="switchProfileTab('procedures')" id="profile-tab-procedures" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Procedures</button>
-        <button onclick="switchProfileTab('prescribing')" id="profile-tab-prescribing" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Part D</button>
-      </div>
+<!-- Update the profile tabs (around line 1315) -->
+<div class="flex gap-1 mt-4 p-1 bg-gray-100 rounded-xl">
+  <button onclick="switchProfileTab('overview')" id="profile-tab-overview" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg bg-white shadow-sm text-purple-700 transition-all">Overview</button>
+  <button onclick="switchProfileTab('affiliations')" id="profile-tab-affiliations" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Affiliations</button>
+  <button onclick="switchProfileTab('comorbidities')" id="profile-tab-comorbidities" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Comorbidities</button>
+  <button onclick="switchProfileTab('procedures')" id="profile-tab-procedures" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Procedures</button>
+  <button onclick="switchProfileTab('prescribing')" id="profile-tab-prescribing" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Part D</button>
+</div>
     </div>
     
     <!-- Content -->
@@ -1895,96 +2052,122 @@ function showAILoading() {
   document.getElementById('aiReportPanel')?.classList.add('hidden');
   document.getElementById('aiCodesPanel')?.classList.add('hidden');
   
-  // Reset header to loading state
-  document.getElementById('resultsTitle').innerHTML = `
-    <span class="loading-pulse">Analyzing condition...</span>
-  `;
-  document.getElementById('resultsSubtitle').innerHTML = `
-    <span class="skeleton inline-block w-48 h-4"></span>
-  `;
+document.getElementById('resultsTitle').innerHTML = `
+  <span class="text-gray-400">Analyzing query...</span>
+`;
+document.getElementById('resultsSubtitle').innerHTML = `
+  <span class="text-gray-300 text-sm">Processing with AI</span>
+`;
   document.getElementById('resultsCountBig').textContent = '—';
   document.getElementById('resultsCount').textContent = 'Searching...';
   
   // Loading skeleton in table
-  document.getElementById('resultsBody').innerHTML = `
-    <tr><td colspan="8" class="px-6 py-12">
-      <div class="max-w-md mx-auto">
-        <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 border border-purple-100">
-          <div class="flex items-center gap-3 mb-6">
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-              </svg>
-            </div>
-            <div>
-              <h3 class="font-semibold text-gray-800">AI Code Mapping</h3>
-              <p class="text-sm text-gray-500">Processing your query...</p>
-            </div>
-          </div>
-          
-          <div class="space-y-3">
-            <div class="ai-step active" id="step1">
-              <div class="icon"><div class="spinner"></div></div>
-              <div class="flex-1">
-                <span class="text-sm font-medium text-gray-700">Identifying condition</span>
-              </div>
-            </div>
-            <div class="ai-step" id="step2">
-              <div class="icon"><svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633z" clip-rule="evenodd"/></svg></div>
-              <div class="flex-1">
-                <span class="text-sm font-medium text-gray-700">Mapping billing codes</span>
-              </div>
-            </div>
-            <div class="ai-step" id="step3">
-              <div class="icon"><svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg></div>
-              <div class="flex-1">
-                <span class="text-sm font-medium text-gray-700">Searching physicians</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="mt-6">
-            <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div id="aiProgressBar" class="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500" style="width: 10%"></div>
-            </div>
-          </div>
+document.getElementById('resultsBody').innerHTML = `
+  <tr><td colspan="8" class="p-0">
+    <div class="loading-container">
+      <!-- Spinner -->
+      <div class="loader-spinner"></div>
+      
+      <!-- Step indicators (horizontal pills) -->
+      <div class="loader-steps">
+        <div class="loader-step active" id="step1">
+          <span class="loader-step-icon">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle></svg>
+          </span>
+          <span>Identify</span>
+        </div>
+        <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        <div class="loader-step" id="step2">
+          <span class="loader-step-icon">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z"></path></svg>
+          </span>
+          <span>Map codes</span>
+        </div>
+        <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        <div class="loader-step" id="step3">
+          <span class="loader-step-icon">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </span>
+          <span>Search</span>
         </div>
       </div>
-    </td></tr>`;
-  
-  // Animate steps
-  let stepIndex = 0;
-  const steps = [
-    { step: 1, progress: 25 },
-    { step: 2, progress: 50 },
-    { step: 2, progress: 70 },
-    { step: 3, progress: 90 },
-  ];
-  
-  aiLoadingInterval = setInterval(() => {
-    if (stepIndex >= steps.length) return;
-    
-    const config = steps[stepIndex];
-    const progressBar = document.getElementById('aiProgressBar');
-    if (progressBar) progressBar.style.width = `${config.progress}%`;
-    
-    for (let i = 1; i <= 3; i++) {
-      const stepEl = document.getElementById(`step${i}`);
-      if (!stepEl) continue;
-      const iconEl = stepEl.querySelector('.icon');
       
-      if (i < config.step) {
-        stepEl.classList.remove('active');
-        stepEl.classList.add('done');
-        if (iconEl) iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>`;
-      } else if (i === config.step) {
-        stepEl.classList.add('active');
-        stepEl.classList.remove('done');
-        if (iconEl && !iconEl.querySelector('.spinner')) iconEl.innerHTML = `<div class="spinner"></div>`;
-      }
+      <!-- Progress bar -->
+      <div class="loader-progress-track">
+        <div id="aiProgressBar" class="loader-progress-fill" style="width: 5%"></div>
+      </div>
+      
+      <!-- Status text -->
+      <div class="loader-status" id="loaderStatusText">Understanding your query...</div>
+    </div>
+    
+    <!-- Skeleton preview rows -->
+    <div class="border-t border-gray-100">
+      <div class="skeleton-row">
+        <div class="skeleton-cell skeleton-avatar"></div>
+        <div class="flex-1">
+          <div class="skeleton-cell skeleton-name"></div>
+          <div class="skeleton-cell skeleton-subtitle"></div>
+        </div>
+        <div class="skeleton-cell skeleton-badge"></div>
+        <div class="skeleton-cell skeleton-number ml-auto"></div>
+      </div>
+      <div class="skeleton-row opacity-60">
+        <div class="skeleton-cell skeleton-avatar"></div>
+        <div class="flex-1">
+          <div class="skeleton-cell skeleton-name" style="width: 120px"></div>
+          <div class="skeleton-cell skeleton-subtitle" style="width: 80px"></div>
+        </div>
+        <div class="skeleton-cell skeleton-badge"></div>
+        <div class="skeleton-cell skeleton-number ml-auto"></div>
+      </div>
+      <div class="skeleton-row opacity-30">
+        <div class="skeleton-cell skeleton-avatar"></div>
+        <div class="flex-1">
+          <div class="skeleton-cell skeleton-name" style="width: 160px"></div>
+          <div class="skeleton-cell skeleton-subtitle" style="width: 90px"></div>
+        </div>
+        <div class="skeleton-cell skeleton-badge"></div>
+        <div class="skeleton-cell skeleton-number ml-auto"></div>
+      </div>
+    </div>
+  </td></tr>`;
+  const steps = [
+  { step: 1, progress: 20, status: 'Understanding your query...' },
+  { step: 1, progress: 35, status: 'Identifying medical condition...' },
+  { step: 2, progress: 50, status: 'Mapping to billing codes...' },
+  { step: 2, progress: 65, status: 'Finding relevant procedures...' },
+  { step: 3, progress: 80, status: 'Searching Medicare database...' },
+  { step: 3, progress: 92, status: 'Ranking physicians...' },
+];
+
+aiLoadingInterval = setInterval(() => {
+  if (stepIndex >= steps.length) return;
+  
+  const config = steps[stepIndex];
+  const progressBar = document.getElementById('aiProgressBar');
+  const statusText = document.getElementById('loaderStatusText');
+  
+  if (progressBar) progressBar.style.width = `${config.progress}%`;
+  if (statusText) statusText.textContent = config.status;
+  
+  // Update step states
+  for (let i = 1; i <= 3; i++) {
+    const stepEl = document.getElementById(`step${i}`);
+    if (!stepEl) continue;
+    
+    if (i < config.step) {
+      stepEl.classList.remove('active');
+      stepEl.classList.add('done');
+    } else if (i === config.step) {
+      stepEl.classList.add('active');
+      stepEl.classList.remove('done');
+    } else {
+      stepEl.classList.remove('active', 'done');
     }
-    stepIndex++;
-  }, 1500);
+  }
+  stepIndex++;
+}, 1200);
 }
 
 function stopAILoading() {
@@ -2382,56 +2565,439 @@ function closeProfile() {
   document.getElementById('sidePanelBackdrop').classList.add('hidden');
   selectedPhysician = null;
 }
-    function switchProfileTab(tab) {
-      document.querySelectorAll('[id^="profile-tab-"]').forEach(btn => { btn.classList.remove('bg-white', 'shadow-sm', 'text-purple-700'); btn.classList.add('text-zinc-500'); });
-      document.getElementById(`profile-tab-${tab}`).classList.add('bg-white', 'shadow-sm', 'text-purple-700');
-      document.getElementById(`profile-tab-${tab}`).classList.remove('text-zinc-500');
-      if (tab === 'overview') renderProfileOverview();
-      else if (tab === 'comorbidities') renderProfileComorbidities();
-      else if (tab === 'procedures') renderProfileProcedures();
-      else if (tab === 'prescribing') renderProfilePrescribing();
-    }
+// Comprehensive Affiliations Tab with Hospital Data
+async function renderProfileAffiliations() {
+  if (!selectedPhysician) return;
+  const npi = selectedPhysician.npi;
+  
+  document.getElementById('profileContent').innerHTML = `
+    <div class="flex justify-center py-12">
+      <div class="text-center">
+        <div class="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <div class="text-sm text-gray-500">Loading affiliations...</div>
+      </div>
+    </div>`;
+  
+  try {
+    const res = await fetch(`/api/physicians/${npi}/affiliations`);
+    const data = await res.json();
+    
+    if (!data.success) throw new Error(data.error || 'Failed to load affiliations');
+    
+    const aff = data.affiliations || {};
+    const locations = aff.practiceLocations || [];
+    const hospitals = aff.hospitalAffiliations || [];
+    const groups = aff.groupPractices || [];
+    const specialties = aff.specialties || [];
+    
+    document.getElementById('profileContent').innerHTML = `
+      <div class="space-y-5">
+        
+        <!-- Organization / Group Practice -->
+        ${aff.organizationName ? `
+        <div class="bg-white border border-black/5 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">Organization</h3>
+          <div class="text-base font-medium text-zinc-800">${aff.organizationName}</div>
+          ${aff.soleProprietor ? '<div class="text-xs text-zinc-500 mt-1">Sole Proprietor</div>' : ''}
+        </div>
+        ` : ''}
+        
+        <!-- Hospital Affiliations -->
+        <div class="bg-white border border-black/5 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">
+            Hospital Affiliations
+            ${hospitals.length > 0 ? `<span class="ml-2 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-normal">${hospitals.length}</span>` : ''}
+          </h3>
+          ${hospitals.length > 0 ? `
+            <div class="space-y-2">
+              ${hospitals.map(h => `
+                <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-zinc-700">${h.name}</div>
+                    <div class="text-xs text-zinc-400 mt-0.5">CCN: ${h.ccn}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <div class="p-3 bg-gray-50 rounded-lg">
+              <div class="text-sm text-zinc-500">No hospital affiliations found</div>
+              <div class="text-xs text-zinc-400 mt-1">Hospital privileges may not be reported to CMS</div>
+            </div>
+          `}
+        </div>
+        
+        <!-- Group Practices -->
+        ${groups.length > 0 ? `
+        <div class="bg-white border border-black/5 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">
+            Group Practice
+            <span class="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-normal">${groups.length}</span>
+          </h3>
+          <div class="space-y-2">
+            ${groups.map(g => `
+              <div class="p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <div class="text-sm font-medium text-zinc-700">${g.name}</div>
+                ${g.address ? `<div class="text-xs text-zinc-500 mt-1">${g.address}</div>` : ''}
+                ${g.city ? `<div class="text-xs text-zinc-500">${g.city}, ${g.state} ${formatZip(g.zip)}</div>` : ''}
+                ${g.phone ? `<div class="text-xs text-zinc-400 mt-1">📞 ${g.phone}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+        
+        <!-- Medical School -->
+        ${aff.medicalSchool ? `
+        <div class="bg-white border border-black/5 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">Medical Education</h3>
+          <div class="text-sm font-medium text-zinc-700">${aff.medicalSchool}</div>
+          ${aff.graduationYear ? `<div class="text-xs text-zinc-500 mt-1">Graduated: ${aff.graduationYear}</div>` : ''}
+        </div>
+        ` : ''}
+        
+        <!-- Practice Locations -->
+        <div class="bg-white border border-black/5 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Practice Locations</h3>
+          ${locations.length > 0 ? `
+            <div class="space-y-2">
+              ${locations.map(loc => `
+                <div class="p-3 bg-gray-50 rounded-lg">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="px-2 py-0.5 text-xs font-medium rounded ${loc.type === 'Practice' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}">${loc.type}</span>
+                  </div>
+                  <div class="text-sm text-zinc-700">${loc.address1}${loc.address2 ? ', ' + loc.address2 : ''}</div>
+                  <div class="text-sm text-zinc-700">${loc.city}, ${loc.state} ${formatZip(loc.zip)}</div>
+                  ${loc.phone ? `<div class="text-xs text-zinc-400 mt-1">📞 ${loc.phone}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="text-sm text-zinc-500">No practice locations on file</div>'}
+        </div>
+        
+        <!-- Specialties/Taxonomies -->
+        <div class="bg-white border border-black/5 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Specialties & Licenses</h3>
+          ${specialties.length > 0 ? `
+            <div class="space-y-2">
+              ${specialties.map(s => `
+                <div class="flex items-center justify-between p-2 ${s.primary ? 'bg-purple-50 border border-purple-100' : 'bg-gray-50'} rounded">
+                  <div>
+                    <div class="text-sm font-medium text-zinc-700">${s.description}</div>
+                    <div class="text-xs text-zinc-500">${s.code ? s.code + ' • ' : ''}${s.license ? 'License: ' + s.license : ''}${s.state ? ' (' + s.state + ')' : ''}</div>
+                  </div>
+                  ${s.primary ? '<span class="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">Primary</span>' : ''}
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="text-sm text-zinc-500">No specialty data</div>'}
+        </div>
+        
+        <!-- Data Source -->
+        <div class="text-xs text-zinc-400 pt-2 border-t border-gray-100">
+          Sources: NPPES NPI Registry, CMS Clinician Data • Last updated: ${aff.lastUpdated || 'Unknown'}
+        </div>
+        
+      </div>`;
+  } catch (err) {
+    document.getElementById('profileContent').innerHTML = `
+      <div class="p-4 bg-red-50 rounded-lg text-red-600 text-sm">${err.message}</div>`;
+  }
+}
+// async function renderProfileAffiliations() {
+//   if (!selectedPhysician) return;
+//   const npi = selectedPhysician.npi;
+  
+//   document.getElementById('profileContent').innerHTML = `
+//     <div class="flex justify-center py-12">
+//       <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+//     </div>`;
+  
+//   try {
+//     const res = await fetch(`/api/physicians/${npi}/affiliations`);
+//     const data = await res.json();
+    
+//     if (!data.success) throw new Error(data.error);
+    
+//     const aff = data.affiliations || {};
+//     const locations = aff.practiceLocations || [];
+//     const specialties = aff.specialties || [];
+//     const hospitals = aff.hospitalAffiliations || [];
+    
+//     document.getElementById('profileContent').innerHTML = `
+//       <div class="space-y-5">
+        
+//         <!-- Organization -->
+//         ${aff.organizationName ? `
+//         <div class="bg-white border border-black/5 rounded-lg p-4">
+//           <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">Organization</h3>
+//           <div class="text-base font-medium text-zinc-800">${aff.organizationName}</div>
+//           ${aff.sole_proprietor === 'YES' ? '<div class="text-xs text-zinc-500 mt-1">Sole Proprietor</div>' : ''}
+//         </div>
+//         ` : `
+//         <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+//           <div class="flex items-start gap-2">
+//             <svg class="w-4 h-4 text-amber-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+//             <div class="text-sm text-amber-700">No organization affiliation on file. This provider may practice independently.</div>
+//           </div>
+//         </div>
+//         `}
+        
+//         <!-- Practice Locations -->
+//         <div class="bg-white border border-black/5 rounded-lg p-4">
+//           <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Practice Locations</h3>
+//           ${locations.length > 0 ? `
+//             <div class="space-y-3">
+//               ${locations.map(loc => `
+//                 <div class="p-3 bg-gray-50 rounded-lg">
+//                   <div class="flex items-center gap-2 mb-1">
+//                     <span class="px-2 py-0.5 text-xs font-medium rounded ${loc.type === 'Practice' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}">${loc.type}</span>
+//                   </div>
+//                   <div class="text-sm text-zinc-700">${loc.address}</div>
+//                   <div class="text-sm text-zinc-700">${loc.city}, ${loc.state} ${loc.zip}</div>
+//                   ${loc.phone ? `<div class="text-xs text-zinc-500 mt-1">📞 ${loc.phone}</div>` : ''}
+//                 </div>
+//               `).join('')}
+//             </div>
+//           ` : '<div class="text-sm text-zinc-500">No practice locations on file</div>'}
+//         </div>
+        
+//         <!-- Hospital Affiliations -->
+//         <div class="bg-white border border-black/5 rounded-lg p-4">
+//           <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Hospital Affiliations</h3>
+//           ${hospitals.length > 0 ? `
+//             <div class="space-y-2">
+//               ${hospitals.map(h => `
+//                 <div class="flex items-center gap-3 p-2 bg-gray-50 rounded">
+//                   <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+//                   <div>
+//                     <div class="text-sm font-medium text-zinc-700">${h.name}</div>
+//                     ${h.state ? `<div class="text-xs text-zinc-500">${h.state}</div>` : ''}
+//                   </div>
+//                 </div>
+//               `).join('')}
+//             </div>
+//           ` : `
+//             <div class="text-sm text-zinc-500">No hospital affiliations on file in NPPES</div>
+//             <div class="text-xs text-zinc-400 mt-1">Note: NPPES may not include all affiliations</div>
+//           `}
+//         </div>
+        
+//         <!-- Specialties/Taxonomies -->
+//         <div class="bg-white border border-black/5 rounded-lg p-4">
+//           <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Taxonomy & Licenses</h3>
+//           ${specialties.length > 0 ? `
+//             <div class="space-y-2">
+//               ${specialties.map(s => `
+//                 <div class="flex items-center justify-between p-2 ${s.primary ? 'bg-purple-50 border border-purple-100' : 'bg-gray-50'} rounded">
+//                   <div>
+//                     <div class="text-sm font-medium text-zinc-700">${s.description}</div>
+//                     <div class="text-xs text-zinc-500">${s.code}${s.license ? ` • License: ${s.license}` : ''}${s.state ? ` (${s.state})` : ''}</div>
+//                   </div>
+//                   ${s.primary ? '<span class="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">Primary</span>' : ''}
+//                 </div>
+//               `).join('')}
+//             </div>
+//           ` : '<div class="text-sm text-zinc-500">No taxonomy data</div>'}
+//         </div>
+        
+//         <!-- Data Source -->
+//         <div class="text-xs text-zinc-400 pt-2 border-t border-gray-100">
+//           Source: NPPES NPI Registry • Last updated: ${aff.lastUpdated || 'Unknown'}
+//         </div>
+        
+//       </div>`;
+//   } catch (err) {
+//     document.getElementById('profileContent').innerHTML = `
+//       <div class="p-4 bg-red-50 rounded-lg text-red-600 text-sm">${err.message}</div>`;
+//   }
+// }
+function formatZip(zip) {
+  if (!zip) return '';
+  const clean = String(zip).replace(/\D/g, '');
+  if (clean.length === 9) {
+    return `${clean.slice(0, 5)}-${clean.slice(5)}`;
+  }
+  return clean.slice(0, 5);
+}
 
-    function renderProfileOverview() {
-      if (!selectedPhysician) return;
-      const p = selectedPhysician;
-      document.getElementById('profileContent').innerHTML = `
-        <div class="space-y-5">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="stat-card rounded-lg p-4">
-              <div class="text-xs text-zinc-500 mb-1">Beneficiaries</div>
-              <div class="text-2xl font-bold text-zinc-800">${formatNumber(p.totalBeneficiaries)}</div>
-            </div>
-            <div class="stat-card rounded-lg p-4">
-              <div class="text-xs text-zinc-500 mb-1">Services</div>
-              <div class="text-2xl font-bold text-zinc-800">${formatNumber(p.totalServices)}</div>
-            </div>
-          </div>
-          <div class="bg-white border border-black/5 rounded-lg p-4">
-            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Practice Details</h3>
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div><div class="text-zinc-400 text-xs">Location</div><div class="text-zinc-700">${p.city || '-'}, ${p.state || '-'} ${p.zip || ''}</div></div>
-              <div><div class="text-zinc-400 text-xs">Specialty</div><div class="text-zinc-700">${p.specialty || '-'}</div></div>
-              <div><div class="text-zinc-400 text-xs">Entity Type</div><div class="text-zinc-700">${p.entityType || '-'}</div></div>
-              <div><div class="text-zinc-400 text-xs">Medicare</div><div class="text-zinc-700">${p.medicareParticipation ? '✓ Participating' : '✗ Non-participating'}</div></div>
-            </div>
-          </div>
-          <div class="bg-white border border-black/5 rounded-lg p-4">
-            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Patient Acuity</h3>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-600">Avg Risk Score</span>
-              <span class="badge ${getRiskBadge(p.avgRiskScore)}">${p.avgRiskScore?.toFixed(2) || '-'}</span>
-            </div>
-            ${p.comparisons?.riskScore ? `<div class="text-xs text-zinc-500 mt-2">${p.comparisons.riskScore.interpretation === 'high_acuity' ? 'High acuity' : p.comparisons.riskScore.interpretation === 'above_average' ? 'Above average' : 'Average'} (Nat'l: ${p.comparisons.riskScore.national})</div>` : ''}
-          </div>
-          <div class="bg-white border border-black/5 rounded-lg p-4">
-            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Medicare Payment</h3>
-            <div class="text-2xl font-bold text-zinc-800">$${formatNumber(p.totalMedicarePayment)}</div>
-            <div class="text-xs text-zinc-400 mt-1">${formatNumber(p.uniqueHCPCS)} unique HCPCS codes</div>
-          </div>
-        </div>`;
-    }
+function switchProfileTab(tab) {
+  document.querySelectorAll('[id^="profile-tab-"]').forEach(btn => { 
+    btn.classList.remove('bg-white', 'shadow-sm', 'text-purple-700'); 
+    btn.classList.add('text-gray-500'); 
+  });
+  document.getElementById(`profile-tab-${tab}`).classList.add('bg-white', 'shadow-sm', 'text-purple-700');
+  document.getElementById(`profile-tab-${tab}`).classList.remove('text-gray-500');
+  
+  if (tab === 'overview') renderProfileOverview();
+  else if (tab === 'affiliations') renderProfileAffiliations();
+  else if (tab === 'comorbidities') renderProfileComorbidities();
+  else if (tab === 'procedures') renderProfileProcedures();
+  else if (tab === 'prescribing') renderProfilePrescribing();
+}
+    // function switchProfileTab(tab) {
+    //   document.querySelectorAll('[id^="profile-tab-"]').forEach(btn => { btn.classList.remove('bg-white', 'shadow-sm', 'text-purple-700'); btn.classList.add('text-zinc-500'); });
+    //   document.getElementById(`profile-tab-${tab}`).classList.add('bg-white', 'shadow-sm', 'text-purple-700');
+    //   document.getElementById(`profile-tab-${tab}`).classList.remove('text-zinc-500');
+    //   if (tab === 'overview') renderProfileOverview();
+    //   else if (tab === 'comorbidities') renderProfileComorbidities();
+    //   else if (tab === 'procedures') renderProfileProcedures();
+    //   else if (tab === 'prescribing') renderProfilePrescribing();
+    // }
 
+    // function renderProfileOverview() {
+    //   if (!selectedPhysician) return;
+    //   const p = selectedPhysician;
+    //   document.getElementById('profileContent').innerHTML = `
+    //     <div class="space-y-5">
+    //       <div class="grid grid-cols-2 gap-4">
+    //         <div class="stat-card rounded-lg p-4">
+    //           <div class="text-xs text-zinc-500 mb-1">Beneficiaries</div>
+    //           <div class="text-2xl font-bold text-zinc-800">${formatNumber(p.totalBeneficiaries)}</div>
+    //         </div>
+    //         <div class="stat-card rounded-lg p-4">
+    //           <div class="text-xs text-zinc-500 mb-1">Services</div>
+    //           <div class="text-2xl font-bold text-zinc-800">${formatNumber(p.totalServices)}</div>
+    //         </div>
+    //       </div>
+    //       <div class="bg-white border border-black/5 rounded-lg p-4">
+    //         <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Practice Details</h3>
+    //         <div class="grid grid-cols-2 gap-4 text-sm">
+    //           <div><div class="text-zinc-400 text-xs">Location</div><div class="text-zinc-700">${p.city || '-'}, ${p.state || '-'} ${p.zip || ''}</div></div>
+    //           <div><div class="text-zinc-400 text-xs">Specialty</div><div class="text-zinc-700">${p.specialty || '-'}</div></div>
+    //           <div><div class="text-zinc-400 text-xs">Entity Type</div><div class="text-zinc-700">${p.entityType || '-'}</div></div>
+    //           <div><div class="text-zinc-400 text-xs">Medicare</div><div class="text-zinc-700">${p.medicareParticipation ? '✓ Participating' : '✗ Non-participating'}</div></div>
+    //         </div>
+    //       </div>
+    //       <div class="bg-white border border-black/5 rounded-lg p-4">
+    //         <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Patient Acuity</h3>
+    //         <div class="flex items-center justify-between">
+    //           <span class="text-sm text-zinc-600">Avg Risk Score</span>
+    //           <span class="badge ${getRiskBadge(p.avgRiskScore)}">${p.avgRiskScore?.toFixed(2) || '-'}</span>
+    //         </div>
+    //         ${p.comparisons?.riskScore ? `<div class="text-xs text-zinc-500 mt-2">${p.comparisons.riskScore.interpretation === 'high_acuity' ? 'High acuity' : p.comparisons.riskScore.interpretation === 'above_average' ? 'Above average' : 'Average'} (Nat'l: ${p.comparisons.riskScore.national})</div>` : ''}
+    //       </div>
+    //       <div class="bg-white border border-black/5 rounded-lg p-4">
+    //         <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Medicare Payment</h3>
+    //         <div class="text-2xl font-bold text-zinc-800">$${formatNumber(p.totalMedicarePayment)}</div>
+    //         <div class="text-xs text-zinc-400 mt-1">${formatNumber(p.uniqueHCPCS)} unique HCPCS codes</div>
+    //       </div>
+    //     </div>`;
+    // }
+function renderProfileOverview() {
+  if (!selectedPhysician) return;
+  const p = selectedPhysician;
+  
+  // Calculate derived metrics
+  const totals = p.totals || {};
+  const totalBenes = p.totalBeneficiaries || totals.beneficiaries || 0;
+  const totalSrvcs = p.totalServices || totals.services || 0;
+  const totalPayment = totals.payment || p.totalMedicarePayment || 0;
+  const totalCharges = totals.charges || 0;
+  const uniqueHCPCS = totals.hcpcsCodes || p.uniqueHCPCS || 0;
+  const avgSrvcsPerBene = totalBenes > 0 ? (totalSrvcs / totalBenes).toFixed(1) : '—';
+  const avgPaymentPerSrvc = totalSrvcs > 0 ? (totalPayment / totalSrvcs).toFixed(2) : '—';
+  const avgPaymentPerBene = totalBenes > 0 ? (totalPayment / totalBenes).toFixed(2) : '—';
+  
+  // Drug vs Medical breakdown
+  const drugSrvcs = p.drugServices || {};
+  const medSrvcs = p.medicalServices || {};
+  
+  document.getElementById('profileContent').innerHTML = `
+    <div class="space-y-5">
+      
+      <!-- Primary Metrics -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="stat-card rounded-lg p-4">
+          <div class="text-xs text-zinc-500 mb-1">Total Beneficiaries</div>
+          <div class="text-2xl font-bold text-zinc-800">${formatNumber(totalBenes)}</div>
+          <div class="text-xs text-zinc-400 mt-1">unique patients</div>
+        </div>
+        <div class="stat-card rounded-lg p-4">
+          <div class="text-xs text-zinc-500 mb-1">Total Services</div>
+          <div class="text-2xl font-bold text-zinc-800">${formatNumber(totalSrvcs)}</div>
+          <div class="text-xs text-zinc-400 mt-1">${avgSrvcsPerBene} per patient</div>
+        </div>
+      </div>
+      
+      <!-- Financial Metrics -->
+      <div class="bg-white border border-black/5 rounded-lg p-4">
+        <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Volume & Payments</h3>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-zinc-600">Medicare Payments</span>
+            <span class="text-lg font-semibold text-zinc-800">$${formatNumber(totalPayment)}</span>
+          </div>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-zinc-500">Avg per Service</span>
+            <span class="text-zinc-700">$${avgPaymentPerSrvc}</span>
+          </div>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-zinc-500">Avg per Beneficiary</span>
+            <span class="text-zinc-700">$${avgPaymentPerBene}</span>
+          </div>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-zinc-500">Submitted Charges</span>
+            <span class="text-zinc-700">$${formatNumber(totalCharges)}</span>
+          </div>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-zinc-500">Unique HCPCS Codes</span>
+            <span class="text-zinc-700">${uniqueHCPCS}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Service Breakdown -->
+      <div class="bg-white border border-black/5 rounded-lg p-4">
+        <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Service Breakdown</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="p-3 bg-blue-50 rounded-lg">
+            <div class="text-xs text-blue-600 font-medium mb-1">Medical Services</div>
+            <div class="text-lg font-semibold text-blue-800">${formatNumber(medSrvcs.services || 0)}</div>
+            <div class="text-xs text-blue-500">${formatNumber(medSrvcs.beneficiaries || 0)} patients</div>
+          </div>
+          <div class="p-3 bg-purple-50 rounded-lg">
+            <div class="text-xs text-purple-600 font-medium mb-1">Drug Services</div>
+            <div class="text-lg font-semibold text-purple-800">${formatNumber(drugSrvcs.services || 0)}</div>
+            <div class="text-xs text-purple-500">${formatNumber(drugSrvcs.beneficiaries || 0)} patients</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Practice Details -->
+      <div class="bg-white border border-black/5 rounded-lg p-4">
+        <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Practice Details</h3>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div><div class="text-zinc-400 text-xs">Location</div><div class="text-zinc-700">${p.city || '—'}, ${p.state || '—'} ${p.zip || ''}</div></div>
+          <div><div class="text-zinc-400 text-xs">Specialty</div><div class="text-zinc-700">${p.specialty || '—'}</div></div>
+          <div><div class="text-zinc-400 text-xs">Entity Type</div><div class="text-zinc-700">${p.entityType || '—'}</div></div>
+          <div><div class="text-zinc-400 text-xs">Medicare</div><div class="text-zinc-700">${p.medicareParticipating ? '✓ Participating' : '✗ Non-participating'}</div></div>
+        </div>
+      </div>
+      
+      <!-- Patient Acuity -->
+      <div class="bg-white border border-black/5 rounded-lg p-4">
+        <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Patient Acuity</h3>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-zinc-600">Avg HCC Risk Score</span>
+          <span class="badge ${getRiskBadge(p.avgRiskScore)}">${p.avgRiskScore?.toFixed(2) || '—'}</span>
+        </div>
+        ${p.comparisons?.riskScore ? `<div class="text-xs text-zinc-500 mt-2">${p.comparisons.riskScore.interpretation === 'high_acuity' ? '↑ High acuity' : p.comparisons.riskScore.interpretation === 'above_average' ? '↑ Above average' : '≈ Average'} vs National (${p.comparisons.riskScore.national})</div>` : ''}
+        <div class="mt-3 pt-3 border-t border-gray-100">
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-zinc-500">Avg Patient Age</span>
+            <span class="text-zinc-700">${p.demographics?.avgAge?.toFixed(1) || '—'} years</span>
+          </div>
+        </div>
+      </div>
+      
+    </div>`;
+}
     function renderProfileComorbidities() {
       if (!selectedPhysician) return;
       const p = selectedPhysician;
