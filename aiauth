@@ -1,0 +1,848 @@
+/**
+ * ================================================================================
+ * LEAF INTELLIGENCE - AUTHENTICATION ROUTES
+ * ================================================================================
+ * 
+ * Handles all authentication and account management:
+ * - POST /auth/register - Create new account
+ * - POST /auth/login - Login and create session
+ * - POST /auth/logout - Destroy session
+ * - GET  /auth/me - Get current user
+ * - POST /auth/forgot-password - Request password reset
+ * - POST /auth/reset-password - Complete password reset
+ * - PUT  /auth/profile - Update profile
+ * - PUT  /auth/password - Change password
+ * - GET  /auth/sessions - Get active sessions
+ * - DELETE /auth/sessions/:id - Revoke session
+ * - GET  /auth/activity - Get activity history
+ * 
+ * @version 1.0.0
+ */
+
+const express = require('express');
+const crypto = require('crypto');
+const router = express.Router();
+
+const {
+  User,
+  Session,
+  logActivity,
+  findUserByEmail,
+  findUserById,
+  createUser,
+  getUserActivity
+} = require('./aidb');
+
+// ============================================
+// UTILITIES
+// ============================================
+
+/**
+ * Generate secure random token
+ */
+function generateToken(length = 64) {
+  return crypto.randomBytes(length).toString('hex');
+}
+
+/**
+ * Parse user agent string for device info
+ */
+function parseUserAgent(userAgent) {
+  const ua = userAgent || '';
+  
+  let browser = 'Unknown';
+  let os = 'Unknown';
+  let device = 'Desktop';
+  
+  // Browser detection
+  if (ua.includes('Chrome')) browser = 'Chrome';
+  else if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Safari')) browser = 'Safari';
+  else if (ua.includes('Edge')) browser = 'Edge';
+  else if (ua.includes('Opera')) browser = 'Opera';
+  
+  // OS detection
+  if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Mac')) os = 'macOS';
+  else if (ua.includes('Linux')) os = 'Linux';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+  
+  // Device type
+  if (ua.includes('Mobile') || ua.includes('Android') || ua.includes('iPhone')) {
+    device = 'Mobile';
+  } else if (ua.includes('Tablet') || ua.includes('iPad')) {
+    device = 'Tablet';
+  }
+  
+  return { browser, os, device };
+}
+
+/**
+ * Get client IP address
+ */
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+         req.headers['x-real-ip'] ||
+         req.connection?.remoteAddress ||
+         req.socket?.remoteAddress ||
+         'unknown';
+}
+
+/**
+ * Create session for user
+ */
+async function createSession(user, req, rememberMe = false) {
+  const token = generateToken();
+  const userAgent = req.headers['user-agent'] || '';
+  const ipAddress = getClientIp(req);
+  const deviceInfo = parseUserAgent(userAgent);
+  
+  // Session duration: 30 days if remember me, otherwise 24 hours
+  const duration = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const expiresAt = new Date(Date.now() + duration);
+  
+  const session = new Session({
+    userId: user._id,
+    token,
+    userAgent,
+    ipAddress,
+    deviceInfo,
+    expiresAt,
+    rememberMe
+  });
+  
+  await session.save();
+  
+  // Update user's last login info
+  user.security.lastLoginAt = new Date();
+  user.security.lastLoginIp = ipAddress;
+  await user.save();
+  
+  return { token, expiresAt };
+}
+
+/**
+ * Validate session token and get user
+ */
+async function validateSession(token) {
+  if (!token) return null;
+  
+  const session = await Session.findOne({ 
+    token, 
+    isActive: true,
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) return null;
+  
+  const user = await User.findById(session.userId);
+  if (!user || user.status !== 'active') {
+    return null;
+  }
+  
+  return { user, session };
+}
+
+// ============================================
+// AUTH MIDDLEWARE (for this router)
+// ============================================
+
+async function requireAuth(req, res, next) {
+  const token = req.cookies?.auth_token || 
+                req.headers.authorization?.replace('Bearer ', '');
+  
+  const result = await validateSession(token);
+  
+  if (!result) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Authentication required' 
+    });
+  }
+  
+  req.user = result.user;
+  req.session = result.session;
+  next();
+}
+
+// ============================================
+// ROUTES: REGISTRATION
+// ============================================
+
+/**
+ * POST /auth/register
+ * Create new user account
+ */
+router.post('/register', async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, company } = req.body;
+    
+    // Validation
+    if (!email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email, password, first name, and last name are required'
+      });
+    }
+    
+    // Email format validation
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please enter a valid email address'
+      });
+    }
+    
+    // Password strength
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters'
+      });
+    }
+    
+    // Check if email already exists
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: 'An account with this email already exists'
+      });
+    }
+    
+    // Create user
+    const user = await createUser({
+      email: email.toLowerCase().trim(),
+      password,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      company: company?.trim() || ''
+    });
+    
+    // Log activity
+    await logActivity(user._id, 'signup', {}, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    console.log(`[AUTH] New user registered: ${email}`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Account created successfully'
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create account. Please try again.'
+    });
+  }
+});
+
+// ============================================
+// ROUTES: LOGIN / LOGOUT
+// ============================================
+
+/**
+ * POST /auth/login
+ * Authenticate user and create session
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password, rememberMe } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+    
+    // Find user
+    const user = await findUserByEmail(email);
+    
+    if (!user) {
+      // Don't reveal if email exists
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+    
+    // Check if account is locked
+    if (user.isLocked()) {
+      await logActivity(user._id, 'failed_login', { reason: 'account_locked' }, {
+        ipAddress: getClientIp(req),
+        userAgent: req.headers['user-agent']
+      });
+      
+      return res.status(423).json({
+        success: false,
+        error: 'Account temporarily locked. Please try again later.'
+      });
+    }
+    
+    // Check if account is active
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        error: 'Account is not active. Please contact support.'
+      });
+    }
+    
+    // Verify password
+    const isMatch = await user.comparePassword(password);
+    
+    if (!isMatch) {
+      await user.incrementFailedLogins();
+      
+      await logActivity(user._id, 'failed_login', { reason: 'wrong_password' }, {
+        ipAddress: getClientIp(req),
+        userAgent: req.headers['user-agent']
+      });
+      
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+    
+    // Reset failed login attempts on successful login
+    if (user.security.failedLoginAttempts > 0) {
+      await user.resetFailedLogins();
+    }
+    
+    // Create session
+    const { token, expiresAt } = await createSession(user, req, rememberMe);
+    
+    // Log successful login
+    await logActivity(user._id, 'login', { rememberMe }, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    console.log(`[AUTH] User logged in: ${email}`);
+    
+    // Set cookie
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      expires: expiresAt
+    });
+    
+    res.json({
+      success: true,
+      user: user.toSafeObject(),
+      token,
+      expiresAt
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed. Please try again.'
+    });
+  }
+});
+
+/**
+ * POST /auth/logout
+ * Destroy current session
+ */
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.cookies?.auth_token || 
+                  req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      const session = await Session.findOne({ token });
+      
+      if (session) {
+        // Log activity before destroying session
+        await logActivity(session.userId, 'logout', {}, {
+          ipAddress: getClientIp(req),
+          userAgent: req.headers['user-agent']
+        });
+        
+        // Deactivate session
+        session.isActive = false;
+        await session.save();
+      }
+    }
+    
+    // Clear cookie
+    res.clearCookie('auth_token');
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Logout failed'
+    });
+  }
+});
+
+/**
+ * POST /auth/logout-all
+ * Destroy all sessions for user
+ */
+router.post('/logout-all', requireAuth, async (req, res) => {
+  try {
+    await Session.updateMany(
+      { userId: req.user._id },
+      { isActive: false }
+    );
+    
+    await logActivity(req.user._id, 'logout', { allSessions: true }, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.clearCookie('auth_token');
+    
+    res.json({
+      success: true,
+      message: 'Logged out of all devices'
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Logout all error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to logout of all devices'
+    });
+  }
+});
+
+// ============================================
+// ROUTES: CURRENT USER
+// ============================================
+
+/**
+ * GET /auth/me
+ * Get current authenticated user
+ */
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.cookies?.auth_token || 
+                  req.headers.authorization?.replace('Bearer ', '');
+    
+    const result = await validateSession(token);
+    
+    if (!result) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated'
+      });
+    }
+    
+    res.json({
+      success: true,
+      user: result.user.toSafeObject()
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Get user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user info'
+    });
+  }
+});
+
+// ============================================
+// ROUTES: PASSWORD RESET
+// ============================================
+
+/**
+ * POST /auth/forgot-password
+ * Request password reset email
+ */
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Always return success to prevent email enumeration
+    const successResponse = {
+      success: true,
+      message: 'If an account exists, a reset link has been sent'
+    };
+    
+    if (!email) {
+      return res.json(successResponse);
+    }
+    
+    const user = await findUserByEmail(email);
+    
+    if (!user) {
+      return res.json(successResponse);
+    }
+    
+    // Generate reset token
+    const resetToken = generateToken(32);
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+    
+    // Save to user
+    user.resetPassword.token = tokenHash;
+    user.resetPassword.expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+    
+    // Log activity
+    await logActivity(user._id, 'password_reset_request', {}, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    // TODO: Send email with reset link
+    // The reset link would be: /reset-password?token=${resetToken}
+    console.log(`[AUTH] Password reset requested for: ${email}`);
+    console.log(`[AUTH] Reset token (DEV ONLY): ${resetToken}`);
+    
+    res.json(successResponse);
+    
+  } catch (error) {
+    console.error('[AUTH] Forgot password error:', error);
+    res.json({
+      success: true,
+      message: 'If an account exists, a reset link has been sent'
+    });
+  }
+});
+
+/**
+ * POST /auth/reset-password
+ * Complete password reset with token
+ */
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and new password are required'
+      });
+    }
+    
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters'
+      });
+    }
+    
+    // Hash the provided token
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+    
+    // Find user with valid token
+    const user = await User.findOne({
+      'resetPassword.token': tokenHash,
+      'resetPassword.expiresAt': { $gt: new Date() }
+    });
+    
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token'
+      });
+    }
+    
+    // Update password
+    user.password = password;
+    user.resetPassword.token = undefined;
+    user.resetPassword.expiresAt = undefined;
+    await user.save();
+    
+    // Invalidate all existing sessions
+    await Session.updateMany(
+      { userId: user._id },
+      { isActive: false }
+    );
+    
+    // Log activity
+    await logActivity(user._id, 'password_reset_complete', {}, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    console.log(`[AUTH] Password reset completed for: ${user.email}`);
+    
+    res.json({
+      success: true,
+      message: 'Password reset successfully. Please login with your new password.'
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password'
+    });
+  }
+});
+
+// ============================================
+// ROUTES: PROFILE MANAGEMENT
+// ============================================
+
+/**
+ * PUT /auth/profile
+ * Update user profile
+ */
+router.put('/profile', requireAuth, async (req, res) => {
+  try {
+    const { firstName, lastName, company, profile } = req.body;
+    const user = req.user;
+    
+    // Update fields
+    if (firstName) user.firstName = firstName.trim();
+    if (lastName) user.lastName = lastName.trim();
+    if (company !== undefined) user.company = company.trim();
+    
+    // Update profile preferences
+    if (profile) {
+      if (profile.timezone) user.profile.timezone = profile.timezone;
+      if (profile.preferences) {
+        if (profile.preferences.theme) user.profile.preferences.theme = profile.preferences.theme;
+        if (profile.preferences.emailNotifications !== undefined) {
+          user.profile.preferences.emailNotifications = profile.preferences.emailNotifications;
+        }
+        if (profile.preferences.defaultSearchScope) {
+          user.profile.preferences.defaultSearchScope = profile.preferences.defaultSearchScope;
+        }
+      }
+    }
+    
+    await user.save();
+    
+    // Log activity
+    await logActivity(user._id, 'profile_update', {
+      updatedFields: Object.keys(req.body)
+    }, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.json({
+      success: true,
+      user: user.toSafeObject()
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Profile update error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update profile'
+    });
+  }
+});
+
+/**
+ * PUT /auth/password
+ * Change password (requires current password)
+ */
+router.put('/password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = req.user;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password and new password are required'
+      });
+    }
+    
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be at least 8 characters'
+      });
+    }
+    
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+    
+    // Update password
+    user.password = newPassword;
+    await user.save();
+    
+    // Optionally invalidate other sessions (keep current session)
+    await Session.updateMany(
+      { 
+        userId: user._id, 
+        token: { $ne: req.session.token }
+      },
+      { isActive: false }
+    );
+    
+    // Log activity
+    await logActivity(user._id, 'password_change', {}, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Password change error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to change password'
+    });
+  }
+});
+
+// ============================================
+// ROUTES: SESSIONS
+// ============================================
+
+/**
+ * GET /auth/sessions
+ * Get all active sessions for user
+ */
+router.get('/sessions', requireAuth, async (req, res) => {
+  try {
+    const sessions = await Session.find({
+      userId: req.user._id,
+      isActive: true,
+      expiresAt: { $gt: new Date() }
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+    
+    // Mark current session
+    const formattedSessions = sessions.map(s => ({
+      id: s._id,
+      deviceInfo: s.deviceInfo,
+      ipAddress: s.ipAddress,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      isCurrent: s.token === req.session.token
+    }));
+    
+    res.json({
+      success: true,
+      sessions: formattedSessions
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Get sessions error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get sessions'
+    });
+  }
+});
+
+/**
+ * DELETE /auth/sessions/:id
+ * Revoke a specific session
+ */
+router.delete('/sessions/:id', requireAuth, async (req, res) => {
+  try {
+    const session = await Session.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+    
+    // Don't allow revoking current session through this endpoint
+    if (session.token === req.session.token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot revoke current session. Use logout instead.'
+      });
+    }
+    
+    session.isActive = false;
+    await session.save();
+    
+    res.json({
+      success: true,
+      message: 'Session revoked'
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Revoke session error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to revoke session'
+    });
+  }
+});
+
+// ============================================
+// ROUTES: ACTIVITY
+// ============================================
+
+/**
+ * GET /auth/activity
+ * Get user's activity history
+ */
+router.get('/activity', requireAuth, async (req, res) => {
+  try {
+    const { limit = 50, skip = 0 } = req.query;
+    
+    const activity = await getUserActivity(req.user._id, {
+      limit: Math.min(parseInt(limit), 100),
+      skip: parseInt(skip)
+    });
+    
+    res.json({
+      success: true,
+      activity
+    });
+    
+  } catch (error) {
+    console.error('[AUTH] Get activity error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get activity'
+    });
+  }
+});
+
+// ============================================
+// EXPORTS
+// ============================================
+
+module.exports = {
+  router,
+  validateSession,
+  requireAuth,
+  getClientIp,
+  generateToken
+};

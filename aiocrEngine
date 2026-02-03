@@ -1,0 +1,642 @@
+const { PDFParse } = require('pdf-parse');
+const { DocumentProcessorServiceClient } = require('@google-cloud/documentai').v1;
+const { PDFDocument } = require('pdf-lib');
+
+// Document AI Configuration
+const PROCESSOR_CONFIG = {
+  projectId: process.env.GOOGLE_CLOUD_PROJECT || 'driven-binder-468415-m2',
+  location: process.env.DOCAI_LOCATION || 'us',
+  processorId: process.env.DOCAI_PROCESSOR_ID || '47b1c66310d4b1f',
+  apiEndpoint: process.env.DOCAI_ENDPOINT || 'us-documentai.googleapis.com',
+  maxPagesPerChunk: 12 // Split before hitting the 30-page limit
+};
+
+// Check if Google Cloud / DocAI is configured
+let docAIClient = null;
+let docAIAvailable = false;
+
+try {
+  docAIClient = new DocumentProcessorServiceClient({
+    apiEndpoint: PROCESSOR_CONFIG.apiEndpoint
+  });
+  docAIAvailable = true;
+  console.log('✅ Document AI initialized successfully (ocrEngine)');
+} catch (error) {
+  docAIAvailable = false;
+  console.log('⚠️ Document AI not available in ocrEngine - using basic extraction only');
+}
+
+/**
+ * Split PDF into chunks of N pages
+ */
+async function splitPdfIntoChunks(buffer, maxPagesPerChunk = 25) {
+  try {
+    const pdfDoc = await PDFDocument.load(buffer);
+    const totalPages = pdfDoc.getPageCount();
+    
+    if (totalPages <= maxPagesPerChunk) {
+      return [{ buffer, startPage: 1, endPage: totalPages, totalPages }];
+    }
+    
+    console.log(`[OCR] Splitting ${totalPages}-page PDF into chunks of ${maxPagesPerChunk} pages...`);
+    
+    const chunks = [];
+    let currentPage = 0;
+    
+    while (currentPage < totalPages) {
+      const endPage = Math.min(currentPage + maxPagesPerChunk, totalPages);
+      const chunkDoc = await PDFDocument.create();
+      
+      // Copy pages to chunk
+      const pagesToCopy = [];
+      for (let i = currentPage; i < endPage; i++) {
+        pagesToCopy.push(i);
+      }
+      
+      const copiedPages = await chunkDoc.copyPages(pdfDoc, pagesToCopy);
+      copiedPages.forEach(page => chunkDoc.addPage(page));
+      
+      const chunkBuffer = Buffer.from(await chunkDoc.save());
+      
+      chunks.push({
+        buffer: chunkBuffer,
+        startPage: currentPage + 1,
+        endPage: endPage,
+        totalPages: totalPages,
+        chunkIndex: chunks.length,
+        pageCount: endPage - currentPage
+      });
+      
+      console.log(`[OCR] Created chunk ${chunks.length}: pages ${currentPage + 1}-${endPage}`);
+      currentPage = endPage;
+    }
+    
+    return chunks;
+  } catch (error) {
+    console.error('[OCR] PDF splitting error:', error.message);
+    throw new Error(`Failed to split PDF: ${error.message}`);
+  }
+}
+
+/**
+ * Calculate extraction quality metrics
+ */
+function calculateExtractionQuality(originalSize, extractedText, docAIResult = null) {
+  const metrics = {
+    textDensity: 0,
+    confidence: 0,
+    coverage: 0,
+    entityCount: 0,
+    tableCount: 0,
+    paragraphCount: 0,
+    missingAreas: [],
+    characterCount: extractedText ? extractedText.length : 0,
+    wordCount: extractedText ? extractedText.split(/\s+/).filter(w => w.length > 0).length : 0
+  };
+
+  if (extractedText) {
+    metrics.textDensity = (extractedText.length / (originalSize / 1024)).toFixed(2);
+  }
+
+  if (docAIResult && docAIResult.document) {
+    const doc = docAIResult.document;
+    if (doc.pages && doc.pages.length > 0) {
+      let totalConfidence = 0;
+      let confidenceCount = 0;
+
+      doc.pages.forEach(page => {
+        if (page.detectedLanguages && page.detectedLanguages.length > 0) {
+          page.detectedLanguages.forEach(lang => {
+            if (lang.confidence) {
+              totalConfidence += lang.confidence;
+              confidenceCount++;
+            }
+          });
+        }
+
+        if (page.formFields) metrics.entityCount += page.formFields.length;
+        if (page.tables) metrics.tableCount += page.tables.length;
+        if (page.paragraphs) metrics.paragraphCount += page.paragraphs.length;
+
+        if (page.blocks) {
+          page.blocks.forEach(block => {
+            if (block.confidence && block.confidence < 0.8) {
+              metrics.missingAreas.push({
+                page: page.pageNumber || 1,
+                confidence: block.confidence,
+                boundingBox: block.layout?.boundingPoly
+              });
+            }
+          });
+        }
+      });
+
+      metrics.confidence = confidenceCount > 0 ? (totalConfidence / confidenceCount * 100).toFixed(2) : 0;
+    }
+
+    metrics.coverage = metrics.confidence > 0 ? Math.min(100, (metrics.confidence * 1.1)).toFixed(2) : 0;
+  } else {
+    // For basic extraction, estimate quality based on text density
+    if (metrics.textDensity > 100) {
+      metrics.confidence = 90;
+      metrics.coverage = 85;
+    } else if (metrics.textDensity > 50) {
+      metrics.confidence = 70;
+      metrics.coverage = 65;
+    } else {
+      metrics.confidence = 40;
+      metrics.coverage = 35;
+    }
+  }
+
+  return metrics;
+}
+
+/**
+ * Basic PDF extraction (no DocAI)
+ */
+async function basicPDFExtraction(buffer) {
+  let parser;
+  try {
+    console.log('[OCR] Starting basic PDF extraction...');
+    // parser = 
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+
+    return {
+      text: result.text || '',
+      numpages: result.total || (result.pages ? result.pages.length : 1),
+      numrender: result.total || (result.pages ? result.pages.length : 1),
+      info: result.info || {},
+      metadata: result.info || {},
+      version: '2.x'
+    };
+  } catch (error) {
+    console.error('[OCR] Basic PDF extraction error:', error.message);
+    return {
+      text: '',
+      numpages: 1,
+      numrender: 1,
+      info: {},
+      metadata: {},
+      version: '2.x',
+      error: error.message
+    };
+  } finally {
+    if (parser && typeof parser.destroy === 'function') {
+      await parser.destroy().catch(() => {});
+    }
+  }
+}
+
+/**
+ * Process PDF with Google Document AI (single chunk)
+ */
+async function processWithDocumentAI(buffer, chunkInfo = null) {
+  if (!docAIClient || !docAIAvailable) {
+    throw new Error('Document AI is not configured. Please set up Google Cloud credentials.');
+  }
+
+  const name = `projects/${PROCESSOR_CONFIG.projectId}/locations/${PROCESSOR_CONFIG.location}/processors/${PROCESSOR_CONFIG.processorId}`;
+  const encodedDocument = buffer.toString('base64');
+
+  const request = {
+    name,
+    rawDocument: {
+      content: encodedDocument,
+      mimeType: 'application/pdf'
+    },
+    fieldMask: {
+      paths: [
+        'text',
+        'pages.layout',
+        'pages.paragraphs',
+        'pages.lines',
+        'pages.tokens',
+        'pages.tables',
+        'pages.formFields',
+        'pages.detectedLanguages',
+        'pages.blocks',
+        'pages.dimension',
+        'pages.image'
+      ]
+    }
+  };
+
+  const logPrefix = chunkInfo 
+    ? `[OCR] Processing chunk ${chunkInfo.chunkIndex + 1} (pages ${chunkInfo.startPage}-${chunkInfo.endPage})...`
+    : '[OCR] Processing with Document AI...';
+  
+  console.log(logPrefix);
+
+  const [result] = await docAIClient.processDocument(request);
+  
+  // Adjust page numbers if this is a chunk
+  if (chunkInfo && result.document && result.document.pages) {
+    result.document.pages.forEach((page, idx) => {
+      page.pageNumber = chunkInfo.startPage + idx;
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * Process PDF with Document AI, automatically splitting if needed
+ */
+async function processWithDocumentAISplit(buffer) {
+  if (!docAIClient || !docAIAvailable) {
+    throw new Error('Document AI is not configured. Please set up Google Cloud credentials.');
+  }
+
+  // Split PDF if needed
+  const chunks = await splitPdfIntoChunks(buffer, PROCESSOR_CONFIG.maxPagesPerChunk);
+  
+  if (chunks.length === 1) {
+    // Single chunk, process normally
+    return await processWithDocumentAI(chunks[0].buffer);
+  }
+
+  // Multiple chunks - process each and merge
+  console.log(`[OCR] Processing ${chunks.length} chunks...`);
+  const results = [];
+  
+  for (const chunk of chunks) {
+    try {
+      const result = await processWithDocumentAI(chunk.buffer, chunk);
+      results.push(result);
+    } catch (error) {
+      console.error(`[OCR] Failed to process chunk ${chunk.chunkIndex + 1}:`, error.message);
+      throw error;
+    }
+  }
+
+  // Merge results
+  return mergeDocumentAIResults(results);
+}
+
+/**
+ * Merge multiple Document AI results into one
+ */
+function mergeDocumentAIResults(results) {
+  if (results.length === 0) {
+    throw new Error('No results to merge');
+  }
+
+  if (results.length === 1) {
+    return results[0];
+  }
+
+  console.log(`[OCR] Merging ${results.length} Document AI results...`);
+
+  const merged = {
+    document: {
+      text: '',
+      pages: [],
+      entities: [],
+      textStyles: []
+    }
+  };
+
+  let textOffset = 0;
+
+  results.forEach((result, idx) => {
+    if (!result.document) return;
+
+    const doc = result.document;
+    const chunkText = doc.text || '';
+    
+    // Append text
+    merged.document.text += chunkText;
+
+    // Merge pages with adjusted text anchors
+    if (doc.pages) {
+      doc.pages.forEach(page => {
+        const adjustedPage = JSON.parse(JSON.stringify(page)); // Deep clone
+        
+        // Adjust text anchors for all elements
+        adjustTextAnchors(adjustedPage, textOffset);
+        
+        merged.document.pages.push(adjustedPage);
+      });
+    }
+
+    // Merge entities if present
+    if (doc.entities) {
+      doc.entities.forEach(entity => {
+        const adjustedEntity = JSON.parse(JSON.stringify(entity));
+        adjustTextAnchors(adjustedEntity, textOffset);
+        merged.document.entities.push(adjustedEntity);
+      });
+    }
+
+    textOffset += chunkText.length;
+  });
+
+  console.log(`[OCR] Merged ${merged.document.pages.length} pages, ${merged.document.text.length} characters`);
+
+  return merged;
+}
+
+/**
+ * Recursively adjust text anchors by an offset
+ */
+function adjustTextAnchors(obj, offset) {
+  if (!obj || typeof obj !== 'object') return;
+
+  if (obj.textAnchor && obj.textAnchor.textSegments) {
+    obj.textAnchor.textSegments.forEach(segment => {
+      if (segment.startIndex !== undefined) {
+        segment.startIndex = (segment.startIndex || 0) + offset;
+      }
+      if (segment.endIndex !== undefined) {
+        segment.endIndex = (segment.endIndex || 0) + offset;
+      }
+    });
+  }
+
+  // Recurse through object properties
+  Object.keys(obj).forEach(key => {
+    if (Array.isArray(obj[key])) {
+      obj[key].forEach(item => adjustTextAnchors(item, offset));
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      adjustTextAnchors(obj[key], offset);
+    }
+  });
+}
+
+/**
+ * Extract text from Document AI text anchors
+ */
+function extractText(documentText, textAnchor) {
+  if (!textAnchor || !textAnchor.textSegments || textAnchor.textSegments.length === 0) {
+    return '';
+  }
+
+  const startIndex = textAnchor.textSegments[0].startIndex || 0;
+  const endIndex = textAnchor.textSegments[0].endIndex;
+
+  return documentText.substring(startIndex, endIndex);
+}
+
+/**
+ * Build render model from basic extraction
+ */
+function buildBasicRenderModel(basicResult) {
+  const pages = [];
+  const text = basicResult.text || '';
+  const textLines = text.split('\n').filter(line => line.trim());
+  const linesPerPage = Math.ceil(textLines.length / (basicResult.numpages || 1));
+
+  for (let i = 0; i < (basicResult.numpages || 1); i++) {
+    const startIdx = i * linesPerPage;
+    const endIdx = Math.min((i + 1) * linesPerPage, textLines.length);
+    const pageLines = textLines.slice(startIdx, endIdx);
+
+    const elements = [];
+    let currentParagraph = [];
+
+    pageLines.forEach(line => {
+      if (line.trim()) {
+        currentParagraph.push(line);
+      } else if (currentParagraph.length > 0) {
+        elements.push({
+          type: 'paragraph',
+          text: currentParagraph.join(' '),
+          confidence: 0.9
+        });
+        currentParagraph = [];
+      }
+    });
+
+    if (currentParagraph.length > 0) {
+      elements.push({
+        type: 'paragraph',
+        text: currentParagraph.join(' '),
+        confidence: 0.9
+      });
+    }
+
+    pages.push({
+      number: i + 1,
+      dimension: { width: 612, height: 792 },
+      elements,
+      tables: [],
+      forms: []
+    });
+  }
+
+  return {
+    pages,
+    text,
+    entities: [],
+    tables: [],
+    metadata: basicResult.metadata || {}
+  };
+}
+
+/**
+ * Build render model from Document AI result
+ */
+function buildRenderModel(docAIResult) {
+  const renderModel = {
+    pages: [],
+    text: docAIResult.document.text || '',
+    entities: [],
+    tables: [],
+    metadata: {}
+  };
+
+  if (docAIResult.document.pages) {
+    docAIResult.document.pages.forEach((page, pageIndex) => {
+      const pageModel = {
+        number: page.pageNumber || (pageIndex + 1),
+        dimension: page.dimension || { width: 612, height: 792 },
+        elements: [],
+        tables: [],
+        forms: [],
+        image: page.image ? {
+          content: page.image.content,
+          mimeType: page.image.mimeType || 'image/png',
+          width: page.image.width,
+          height: page.image.height
+        } : null
+      };
+
+      if (page.paragraphs) {
+        page.paragraphs.forEach(paragraph => {
+          pageModel.elements.push({
+            type: 'paragraph',
+            text: extractText(docAIResult.document.text, paragraph.layout?.textAnchor),
+            boundingBox: paragraph.layout?.boundingPoly,
+            confidence: paragraph.layout?.confidence || 0
+          });
+        });
+      }
+
+      if (page.tables) {
+        page.tables.forEach(table => {
+          const tableData = {
+            type: 'table',
+            headerRows: table.headerRows || [],
+            bodyRows: table.bodyRows || [],
+            cells: [],
+            boundingBox: table.layout?.boundingPoly
+          };
+
+          if (table.bodyRows) {
+            table.bodyRows.forEach(row => {
+              if (row.cells) {
+                row.cells.forEach(cell => {
+                  tableData.cells.push({
+                    text: extractText(docAIResult.document.text, cell.layout?.textAnchor),
+                    rowSpan: cell.rowSpan || 1,
+                    colSpan: cell.colSpan || 1,
+                    boundingBox: cell.layout?.boundingPoly
+                  });
+                });
+              }
+            });
+          }
+
+          pageModel.tables.push(tableData);
+          renderModel.tables.push(tableData);
+        });
+      }
+
+      if (page.formFields) {
+        page.formFields.forEach(field => {
+          pageModel.forms.push({
+            type: 'formField',
+            fieldName: extractText(docAIResult.document.text, field.fieldName?.textAnchor),
+            fieldValue: extractText(docAIResult.document.text, field.fieldValue?.textAnchor),
+            confidence: field.fieldName?.confidence || 0,
+            boundingBox: field.fieldValue?.boundingPoly
+          });
+        });
+      }
+
+      renderModel.pages.push(pageModel);
+    });
+  }
+
+  return renderModel;
+}
+
+/**
+ * Calculate average confidence from Document AI result
+ */
+function calculateAverageConfidence(docAIResult) {
+  if (!docAIResult.document?.pages) return 0;
+
+  let total = 0;
+  let count = 0;
+
+  docAIResult.document.pages.forEach(page => {
+    if (page.detectedLanguages) {
+      page.detectedLanguages.forEach(lang => {
+        if (lang.confidence) {
+          total += lang.confidence;
+          count++;
+        }
+      });
+    }
+  });
+
+  return count > 0 ? (total / count * 100).toFixed(2) : 0;
+}
+
+/**
+ * High-level helper: analyze a PDF buffer and decide
+ * whether to call DocAI based on text density.
+ */
+async function analyzePdfWithOCR(buffer) {
+  const startTime = Date.now();
+  const originalSize = buffer.length;
+
+  // Step 1: basic extraction
+  const basicResult = await basicPDFExtraction(buffer);
+  const basicTextLength = basicResult?.text?.length || 0;
+  const textDensity = basicTextLength / (originalSize / 1024);
+
+  console.log('[OCR] Basic extraction:', {
+    characters: basicTextLength,
+    density: textDensity.toFixed(2),
+    pages: basicResult.numpages
+  });
+
+  const response = {
+    method: 'basic',
+    basicExtraction: basicResult,
+    docAIExtraction: null,
+    renderModel: null,
+    qualityMetrics: null,
+    docAIAvailable,
+    processingTime: 0,
+    originalSize,
+    chunksProcessed: 0
+  };
+
+  const shouldUseDocAI = (textDensity < 100 || basicTextLength < 100) && docAIAvailable;
+
+  if (shouldUseDocAI) {
+    console.log('[OCR] Low text density detected, attempting Document AI...');
+    try {
+      const docAIResult = await processWithDocumentAISplit(buffer);
+      
+      if (docAIResult && docAIResult.document) {
+        response.method = 'documentAI';
+        response.docAIExtraction = {
+          text: docAIResult.document.text,
+          pageCount: docAIResult.document.pages?.length || 0,
+          confidence: calculateAverageConfidence(docAIResult)
+        };
+        response.renderModel = buildRenderModel(docAIResult);
+        response.qualityMetrics = calculateExtractionQuality(
+          originalSize,
+          docAIResult.document.text,
+          docAIResult
+        );
+        
+        // Calculate chunks processed
+        response.chunksProcessed = Math.ceil(basicResult.numpages / PROCESSOR_CONFIG.maxPagesPerChunk);
+        
+        console.log('[OCR] ✓ Document AI extraction successful');
+      }
+    } catch (err) {
+      console.error('[OCR] Document AI failed, falling back to basic extraction:', err.message);
+      response.docAIError = err.message;
+    }
+  }
+
+  // Always ensure we have a render model
+  if (response.method === 'basic' || !response.renderModel) {
+    response.renderModel = buildBasicRenderModel(basicResult);
+    response.qualityMetrics = calculateExtractionQuality(
+      originalSize,
+      basicResult.text || ''
+    );
+  }
+
+  response.processingTime = Date.now() - startTime;
+  console.log(`[OCR] Processing complete (${response.processingTime}ms, method: ${response.method}, chunks: ${response.chunksProcessed})`);
+
+  return response;
+}
+
+module.exports = {
+  analyzePdfWithOCR,
+  basicPDFExtraction,
+  processWithDocumentAI,
+  processWithDocumentAISplit,
+  splitPdfIntoChunks,
+  mergeDocumentAIResults,
+  buildRenderModel,
+  buildBasicRenderModel,
+  calculateExtractionQuality,
+  extractText,
+  calculateAverageConfidence,
+  adjustTextAnchors,
+  docAIAvailable,
+  PROCESSOR_CONFIG
+};

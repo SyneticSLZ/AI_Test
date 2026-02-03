@@ -1,0 +1,222 @@
+/**
+ * ============================================
+ * PROMPT ENHANCER - Backend Route
+ * ============================================
+ * 
+ * Express route for enhancing regulatory intelligence prompts
+ * using GPT-4o-mini for fast, cost-effective enhancement.
+ * 
+ * Add to your Express app:
+ *   const promptEnhancerRoutes = require('./routes/promptEnhancer');
+ *   app.use('/api', promptEnhancerRoutes);
+ */
+
+const express = require('express');
+const router = express.Router();
+const OpenAI = require('openai');
+
+require('dotenv').config();
+// Initialize OpenAI client
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
+
+// System prompt optimized for regulatory intelligence query enhancement
+const ENHANCER_SYSTEM_PROMPT = `You are an expert regulatory intelligence prompt enhancer. Your task is to take user queries about pharmaceutical regulations, clinical trials, FDA data, drug patents, and biomedical research, and enhance them to be more specific, comprehensive, and likely to yield better search results.
+
+ENHANCEMENT GUIDELINES:
+
+1. **Add Specificity**: Include relevant regulatory terms, database identifiers, or classification systems
+   - Drug names → Add generic/brand names, therapeutic class
+   - Diseases → Add ICD codes, medical terminology
+   - Companies → Add full company names, subsidiaries
+
+2. **Expand Scope Appropriately**: Add related aspects the user likely wants
+   - Clinical trials → Include phases, endpoints, patient populations
+   - FDA approvals → Include approval type (NDA, BLA, ANDA), dates
+   - Patents → Include Orange Book listings, exclusivity types
+
+3. **Use Standard Terminology**: Convert casual language to regulatory/medical terms
+   - "side effects" → "adverse events" or "safety profile"
+   - "works better" → "efficacy" or "comparative effectiveness"
+   - "newest drugs" → "recently approved therapies" or "novel agents"
+
+4. **Preserve Intent**: Keep the core question intact while enhancing
+   - Don't change what the user is actually asking
+   - Don't add irrelevant aspects
+
+5. **Keep Concise**: Enhanced prompts should be clear and scannable
+   - Use natural language, not keyword stuffing
+   - 1-3 sentences typically sufficient
+
+EXAMPLES:
+
+Original: "trials for ozempic"
+Enhanced: "What are the ongoing and completed clinical trials for semaglutide (Ozempic/Wegovy) including Phase 2/3 studies, primary endpoints, and patient populations for both diabetes and weight management indications?"
+
+Original: "fda approved cancer drugs 2024"
+Enhanced: "What oncology drugs received FDA approval in 2024? Include the indication, approval pathway (accelerated, breakthrough), and sponsoring company for each new cancer therapy."
+
+Original: "patents expiring soon"
+Enhanced: "Which blockbuster drugs have Orange Book patents or exclusivity periods expiring in the next 2-3 years? Include expected generic entry dates and current annual sales figures."
+
+Original: "is there a generic for humira"
+Enhanced: "What adalimumab biosimilars are FDA-approved and currently marketed in the US? Include launch dates, pricing compared to Humira, and interchangeability status."
+
+Original: "keytruda competitors"
+Enhanced: "What are the competing PD-1/PD-L1 checkpoint inhibitors to pembrolizumab (Keytruda)? Compare their approved indications, clinical trial data for key tumor types, and market positioning."
+
+RESPONSE FORMAT:
+Return ONLY the enhanced prompt text. No explanations, no quotes, no prefixes like "Enhanced:" - just the improved query text.`;
+
+/**
+ * POST /api/enhance-prompt
+ * Enhances a regulatory intelligence prompt using AI
+ */
+router.post('/enhance-prompt', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+
+        // Validation
+        if (!prompt || typeof prompt !== 'string') {
+            return res.status(400).json({
+                error: 'Invalid request',
+                message: 'Prompt is required and must be a string'
+            });
+        }
+
+        const trimmedPrompt = prompt.trim();
+
+        if (trimmedPrompt.length < 3) {
+            return res.status(400).json({
+                error: 'Invalid request',
+                message: 'Prompt must be at least 3 characters'
+            });
+        }
+
+        if (trimmedPrompt.length > 2000) {
+            return res.status(400).json({
+                error: 'Invalid request',
+                message: 'Prompt must be less than 2000 characters'
+            });
+        }
+
+        // Call OpenAI API with GPT-4o-mini for fast, cost-effective enhancement
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content: ENHANCER_SYSTEM_PROMPT
+                },
+                {
+                    role: 'user',
+                    content: trimmedPrompt
+                }
+            ],
+            max_tokens: 500,
+            temperature: 0.7, // Balanced creativity
+            top_p: 0.9
+        });
+
+        const enhancedPrompt = completion.choices[0]?.message?.content?.trim();
+
+        if (!enhancedPrompt) {
+            throw new Error('No response from AI model');
+        }
+
+        // Log for analytics (optional)
+        console.log('[PromptEnhancer] Enhanced prompt:', {
+            original: trimmedPrompt.substring(0, 100),
+            enhanced: enhancedPrompt.substring(0, 100),
+            model: 'gpt-4o-mini',
+            tokens: completion.usage
+        });
+
+        res.json({
+            success: true,
+            originalPrompt: trimmedPrompt,
+            enhancedPrompt: enhancedPrompt,
+            usage: {
+                promptTokens: completion.usage?.prompt_tokens,
+                completionTokens: completion.usage?.completion_tokens,
+                totalTokens: completion.usage?.total_tokens
+            }
+        });
+
+    } catch (error) {
+        console.error('[PromptEnhancer] Error:', error);
+
+        // Handle specific OpenAI errors
+        if (error.code === 'insufficient_quota') {
+            return res.status(503).json({
+                error: 'Service temporarily unavailable',
+                message: 'AI service quota exceeded. Please try again later.'
+            });
+        }
+
+        if (error.code === 'rate_limit_exceeded') {
+            return res.status(429).json({
+                error: 'Too many requests',
+                message: 'Please wait a moment and try again.'
+            });
+        }
+
+        res.status(500).json({
+            error: 'Enhancement failed',
+            message: 'Unable to enhance prompt. Please try again.'
+        });
+    }
+});
+
+/**
+ * GET /api/enhance-prompt/health
+ * Health check endpoint
+ */
+router.get('/enhance-prompt/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        service: 'prompt-enhancer',
+        model: 'gpt-4o-mini'
+    });
+});
+
+module.exports = router;
+
+
+// ============================================
+// ALTERNATIVE: Inline function for existing route file
+// ============================================
+
+/**
+ * If you prefer to add this to an existing routes file,
+ * use this standalone function:
+ */
+
+/*
+async function enhancePrompt(prompt) {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    
+    const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: ENHANCER_SYSTEM_PROMPT },
+            { role: 'user', content: prompt.trim() }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+    });
+    
+    return completion.choices[0]?.message?.content?.trim();
+}
+
+// Usage in your route:
+app.post('/api/enhance-prompt', async (req, res) => {
+    try {
+        const enhanced = await enhancePrompt(req.body.prompt);
+        res.json({ enhancedPrompt: enhanced });
+    } catch (error) {
+        res.status(500).json({ error: 'Enhancement failed' });
+    }
+});
+*/

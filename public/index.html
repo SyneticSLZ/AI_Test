@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Tracker 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <h1 class="text-3xl font-bold">Invoice Tracker 2026</h1>
+            <p class="text-blue-100 mt-1">VG EyeCare Limited - Dispensing Services</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500 uppercase">Total Invoiced</div>
+                <div class="text-2xl font-bold text-gray-800 mt-2" id="totalInvoiced">£0.00</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500 uppercase">Paid</div>
+                <div class="text-2xl font-bold text-green-600 mt-2" id="totalPaid">£0.00</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500 uppercase">Unpaid</div>
+                <div class="text-2xl font-bold text-orange-600 mt-2" id="totalUnpaid">£0.00</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500 uppercase">Total Days</div>
+                <div class="text-2xl font-bold text-blue-600 mt-2" id="totalDays">0</div>
+            </div>
+        </div>
+
+        <!-- Monthly Grid -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-6">Monthly Invoices</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="monthsGrid">
+                <!-- Month cards will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Modal -->
+    <div id="invoiceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-t-lg">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold" id="modalTitle">Invoice</h2>
+                    <button onclick="closeModal()" class="text-white hover:text-gray-200 text-3xl leading-none">&times;</button>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div id="modalContent" class="p-6">
+                <!-- Content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+
+        const companyInfo = {
+            from: {
+                name: 'Dir. Mr P. Mehmi BA(Hons)FBDO',
+                address1: '27 Cumberland Place',
+                address2: 'Sunbury',
+                address3: 'Middx, TW16 6EP',
+                goc: 'GOC No. D-12670'
+            },
+            to: {
+                name: 'Sims',
+                address1: '4 The Causeway',
+                address2: 'Teddington',
+                address3: 'TW11 0HE'
+            },
+            payment: {
+                bank: 'Santander',
+                accountName: 'VG EYECARE LTD',
+                sortCode: '09 06 66',
+                accountNumber: '42467697'
+            }
+        };
+
+        // Initialize or load data from localStorage
+        let invoiceData = JSON.parse(localStorage.getItem('invoiceData')) || {};
+
+        function saveData() {
+            localStorage.setItem('invoiceData', JSON.stringify(invoiceData));
+            updateSummary();
+        }
+
+        function updateSummary() {
+            let totalInvoiced = 0;
+            let totalPaid = 0;
+            let totalUnpaid = 0;
+            let totalDays = 0;
+
+            Object.values(invoiceData).forEach(invoice => {
+                const amount = invoice.days * invoice.rate;
+                totalInvoiced += amount;
+                totalDays += invoice.days;
+                if (invoice.paid) {
+                    totalPaid += amount;
+                } else {
+                    totalUnpaid += amount;
+                }
+            });
+
+            document.getElementById('totalInvoiced').textContent = '£' + totalInvoiced.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('totalPaid').textContent = '£' + totalPaid.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('totalUnpaid').textContent = '£' + totalUnpaid.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('totalDays').textContent = totalDays;
+        }
+
+        function renderMonths() {
+            const grid = document.getElementById('monthsGrid');
+            grid.innerHTML = '';
+
+            months.forEach((month, index) => {
+                const monthData = invoiceData[index];
+                const hasInvoice = !!monthData;
+                const isPaid = hasInvoice && monthData.paid;
+                
+                let statusColor = 'bg-gray-100 border-gray-300';
+                let statusText = 'No Invoice';
+                let statusIcon = '📄';
+                
+                if (hasInvoice) {
+                    if (isPaid) {
+                        statusColor = 'bg-green-50 border-green-300';
+                        statusText = 'Paid';
+                        statusIcon = '✓';
+                    } else {
+                        statusColor = 'bg-orange-50 border-orange-300';
+                        statusText = 'Unpaid';
+                        statusIcon = '⏳';
+                    }
+                }
+
+                const card = document.createElement('div');
+                card.className = `${statusColor} border-2 rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg hover:scale-105`;
+                card.onclick = () => openInvoice(index);
+                
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-lg font-semibold text-gray-800">${month}</span>
+                        <span class="text-2xl">${statusIcon}</span>
+                    </div>
+                    <div class="text-sm text-gray-600 mb-2">${statusText}</div>
+                    ${hasInvoice ? `
+                        <div class="text-xs text-gray-500">${monthData.days} days</div>
+                        <div class="text-lg font-bold text-gray-800 mt-1">£${(monthData.days * monthData.rate).toLocaleString('en-GB', {minimumFractionDigits: 2})}</div>
+                    ` : '<div class="text-xs text-gray-400">Click to create</div>'}
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+
+        function openInvoice(monthIndex) {
+            const month = months[monthIndex];
+            const monthData = invoiceData[monthIndex];
+            
+            document.getElementById('modalTitle').textContent = `${month} 2026 Invoice`;
+            
+            if (!monthData) {
+                showInvoiceForm(monthIndex);
+            } else {
+                showInvoiceView(monthIndex, monthData);
+            }
+            
+            document.getElementById('invoiceModal').classList.remove('hidden');
+            document.getElementById('invoiceModal').classList.add('flex');
+        }
+
+        function showInvoiceForm(monthIndex) {
+            const month = months[monthIndex];
+            const lastMonthData = invoiceData[monthIndex - 1];
+            const defaultRate = lastMonthData ? lastMonthData.rate : 270;
+            
+            document.getElementById('modalContent').innerHTML = `
+                <div class="max-w-md mx-auto">
+                    <div class="text-center mb-6">
+                        <div class="text-6xl mb-4">📝</div>
+                        <h3 class="text-xl font-semibold text-gray-800 mb-2">Create Invoice for ${month}</h3>
+                        <p class="text-gray-600">Enter the details below to generate your invoice</p>
+                    </div>
+                    
+                    <form onsubmit="createInvoice(event, ${monthIndex})" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Number of Days Worked</label>
+                            <input type="number" id="daysInput" required min="1" max="31" 
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+                                placeholder="e.g., 16">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Daily Rate (£)</label>
+                            <input type="number" id="rateInput" required min="0" step="0.01" value="${defaultRate}"
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+                                placeholder="e.g., 270.00">
+                        </div>
+                        
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                            <div class="text-sm text-gray-600 mb-1">Total Amount</div>
+                            <div class="text-3xl font-bold text-blue-600" id="calculatedTotal">£0.00</div>
+                        </div>
+                        
+                        <div class="flex gap-3 pt-4">
+                            <button type="button" onclick="closeModal()" 
+                                class="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-900 transition">
+                                Create Invoice
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            // Add live calculation
+            const daysInput = document.getElementById('daysInput');
+            const rateInput = document.getElementById('rateInput');
+            const totalDisplay = document.getElementById('calculatedTotal');
+            
+            function updateTotal() {
+                const days = parseFloat(daysInput.value) || 0;
+                const rate = parseFloat(rateInput.value) || 0;
+                const total = days * rate;
+                totalDisplay.textContent = '£' + total.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+            
+            daysInput.addEventListener('input', updateTotal);
+            rateInput.addEventListener('input', updateTotal);
+        }
+
+        function createInvoice(event, monthIndex) {
+            event.preventDefault();
+            
+            const days = parseInt(document.getElementById('daysInput').value);
+            const rate = parseFloat(document.getElementById('rateInput').value);
+            
+            invoiceData[monthIndex] = {
+                days: days,
+                rate: rate,
+                paid: false,
+                createdDate: new Date().toISOString()
+            };
+            
+            saveData();
+            renderMonths();
+            showInvoiceView(monthIndex, invoiceData[monthIndex]);
+        }
+
+        function showInvoiceView(monthIndex, monthData) {
+            const month = months[monthIndex];
+            const total = monthData.days * monthData.rate;
+            const monthName = month;
+            const invoiceDate = new Date(2026, monthIndex, new Date(2026, monthIndex + 1, 0).getDate());
+            const formattedDate = invoiceDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            
+            document.getElementById('modalContent').innerHTML = `
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <button onclick="downloadPDF(${monthIndex})" 
+                        class="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center gap-2">
+                        <span>📥</span> Download PDF
+                    </button>
+                    <button onclick="togglePaid(${monthIndex})" 
+                        class="flex-1 sm:flex-none px-6 py-3 ${monthData.paid ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'} text-white rounded-lg font-semibold transition flex items-center justify-center gap-2">
+                        <span>${monthData.paid ? '✓' : '⏳'}</span> ${monthData.paid ? 'Marked as Paid' : 'Mark as Paid'}
+                    </button>
+                    <button onclick="editInvoice(${monthIndex})" 
+                        class="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition">
+                        ✏️ Edit
+                    </button>
+                    <button onclick="deleteInvoice(${monthIndex})" 
+                        class="px-6 py-3 border-2 border-red-300 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition">
+                        🗑️ Delete
+                    </button>
+                </div>
+
+                <!-- Invoice Preview -->
+                <div id="invoicePreview" class="border-2 border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <!-- Invoice Header -->
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-8">
+                        <div class="text-4xl font-bold tracking-wide mb-2">VG EyeCare Limited</div>
+                        <div class="h-1 w-32 bg-white"></div>
+                    </div>
+
+                    <!-- Invoice Body -->
+                    <div class="p-8">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
+                            <!-- From -->
+                            <div>
+                                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">From</h2>
+                                <div class="text-gray-800">
+                                    <div class="font-semibold mb-1">${companyInfo.from.name}</div>
+                                    <div>${companyInfo.from.address1}</div>
+                                    <div>${companyInfo.from.address2}</div>
+                                    <div>${companyInfo.from.address3}</div>
+                                    <div class="mt-2 text-sm text-gray-600">${companyInfo.from.goc}</div>
+                                </div>
+                            </div>
+
+                            <!-- Invoice To -->
+                            <div>
+                                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Invoice To</h2>
+                                <div class="text-gray-800">
+                                    <div class="font-semibold mb-1">${companyInfo.to.name}</div>
+                                    <div>${companyInfo.to.address1}</div>
+                                    <div>${companyInfo.to.address2}</div>
+                                    <div>${companyInfo.to.address3}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Invoice Details Bar -->
+                        <div class="bg-gray-50 border-l-4 border-blue-600 p-4 mb-8">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-sm text-gray-500 uppercase">Invoice Number</div>
+                                    <div class="text-lg font-semibold text-gray-800">${monthName} 2026</div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500 uppercase">Invoice Date</div>
+                                    <div class="text-lg font-semibold text-gray-800">${formattedDate}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Services Section -->
+                        <div class="mb-8">
+                            <h2 class="text-lg font-semibold text-gray-800 mb-4 uppercase tracking-wide">Dispensing Services</h2>
+                            <div class="text-sm text-gray-600 mb-4">Carried Out Through ${monthName} 2026</div>
+                            
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b-2 border-gray-300">
+                                        <th class="text-left py-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">Description</th>
+                                        <th class="text-right py-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">Days</th>
+                                        <th class="text-right py-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">Rate</th>
+                                        <th class="text-right py-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-gray-200">
+                                        <td class="py-4 text-gray-800">Dispensing Services</td>
+                                        <td class="text-right py-4 text-gray-800">${monthData.days}</td>
+                                        <td class="text-right py-4 text-gray-800">£${monthData.rate.toFixed(2)}</td>
+                                        <td class="text-right py-4 font-semibold text-gray-800">£${total.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Total Section -->
+                        <div class="flex justify-end mb-8">
+                            <div class="w-full sm:w-64">
+                                <div class="bg-blue-600 text-white p-4 rounded-lg">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-lg font-semibold uppercase">Total</span>
+                                        <span class="text-2xl font-bold">£${total.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Details -->
+                        <div class="border-t-2 border-gray-200 pt-6">
+                            <h2 class="text-lg font-semibold text-gray-800 mb-4 uppercase tracking-wide">BACS Payment Detail</h2>
+                            <div class="bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-lg border border-gray-200">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-sm text-gray-500 uppercase mb-1">Bank</div>
+                                        <div class="font-semibold text-gray-800">${companyInfo.payment.bank}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500 uppercase mb-1">Account Name</div>
+                                        <div class="font-semibold text-gray-800">${companyInfo.payment.accountName}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500 uppercase mb-1">Sort Code</div>
+                                        <div class="font-semibold text-gray-800 font-mono">${companyInfo.payment.sortCode}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500 uppercase mb-1">Account Number</div>
+                                        <div class="font-semibold text-gray-800 font-mono">${companyInfo.payment.accountNumber}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="bg-gray-100 text-center py-4 text-sm text-gray-600">
+                        Thank you for your business
+                    </div>
+                </div>
+            `;
+        }
+
+        function togglePaid(monthIndex) {
+            invoiceData[monthIndex].paid = !invoiceData[monthIndex].paid;
+            saveData();
+            renderMonths();
+            showInvoiceView(monthIndex, invoiceData[monthIndex]);
+        }
+
+        function editInvoice(monthIndex) {
+            const monthData = invoiceData[monthIndex];
+            const month = months[monthIndex];
+            
+            document.getElementById('modalContent').innerHTML = `
+                <div class="max-w-md mx-auto">
+                    <div class="text-center mb-6">
+                        <div class="text-6xl mb-4">✏️</div>
+                        <h3 class="text-xl font-semibold text-gray-800 mb-2">Edit Invoice for ${month}</h3>
+                        <p class="text-gray-600">Update the details below</p>
+                    </div>
+                    
+                    <form onsubmit="updateInvoice(event, ${monthIndex})" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Number of Days Worked</label>
+                            <input type="number" id="daysInput" required min="1" max="31" value="${monthData.days}"
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Daily Rate (£)</label>
+                            <input type="number" id="rateInput" required min="0" step="0.01" value="${monthData.rate}"
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg">
+                        </div>
+                        
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                            <div class="text-sm text-gray-600 mb-1">Total Amount</div>
+                            <div class="text-3xl font-bold text-blue-600" id="calculatedTotal">£${(monthData.days * monthData.rate).toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                        </div>
+                        
+                        <div class="flex gap-3 pt-4">
+                            <button type="button" onclick="showInvoiceView(${monthIndex}, invoiceData[${monthIndex}])" 
+                                class="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-900 transition">
+                                Update Invoice
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            // Add live calculation
+            const daysInput = document.getElementById('daysInput');
+            const rateInput = document.getElementById('rateInput');
+            const totalDisplay = document.getElementById('calculatedTotal');
+            
+            function updateTotal() {
+                const days = parseFloat(daysInput.value) || 0;
+                const rate = parseFloat(rateInput.value) || 0;
+                const total = days * rate;
+                totalDisplay.textContent = '£' + total.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+            
+            daysInput.addEventListener('input', updateTotal);
+            rateInput.addEventListener('input', updateTotal);
+        }
+
+        function updateInvoice(event, monthIndex) {
+            event.preventDefault();
+            
+            const days = parseInt(document.getElementById('daysInput').value);
+            const rate = parseFloat(document.getElementById('rateInput').value);
+            
+            invoiceData[monthIndex].days = days;
+            invoiceData[monthIndex].rate = rate;
+            
+            saveData();
+            renderMonths();
+            showInvoiceView(monthIndex, invoiceData[monthIndex]);
+        }
+
+        function deleteInvoice(monthIndex) {
+            const month = months[monthIndex];
+            if (confirm(`Are you sure you want to delete the invoice for ${month}? This cannot be undone.`)) {
+                delete invoiceData[monthIndex];
+                saveData();
+                renderMonths();
+                closeModal();
+            }
+        }
+
+        function downloadPDF(monthIndex) {
+            const element = document.getElementById('invoicePreview');
+            const month = months[monthIndex];
+            
+            // Show loading state
+            const button = event.target.closest('button');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span>⏳</span> Generating PDF...';
+            button.disabled = true;
+            
+            html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+                const imgX = (pdfWidth - imgWidth * ratio) / 2;
+                const imgY = 0;
+                
+                pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+                pdf.save(`Invoice_${month}_2026.pdf`);
+                
+                // Reset button
+                button.innerHTML = originalText;
+                button.disabled = false;
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('invoiceModal').classList.add('hidden');
+            document.getElementById('invoiceModal').classList.remove('flex');
+        }
+
+        // Initialize
+        renderMonths();
+        updateSummary();
+    </script>
+</body>
+</html>

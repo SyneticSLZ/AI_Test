@@ -1,0 +1,459 @@
+/**
+ * ================================================================================
+ * LEAF INTELLIGENCE - USER PROMPTS ROUTES
+ * ================================================================================
+ * 
+ * User saved prompts management:
+ * - GET    /api/user/prompts - List user's saved prompts
+ * - GET    /api/user/prompts/:id - Get single prompt
+ * - POST   /api/user/prompts - Create new prompt
+ * - PUT    /api/user/prompts/:id - Update prompt
+ * - DELETE /api/user/prompts/:id - Delete prompt
+ * 
+ * @version 1.0.0
+ */
+
+const express = require('express');
+const router = express.Router();
+const mongoose = require('mongoose');
+
+const { requireAuth } = require('./aiauthMiddleware');
+
+// ============================================
+// PROMPT SCHEMA
+// ============================================
+
+const promptSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  title: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 200
+  },
+  content: {
+    type: String,
+    required: true,
+    maxlength: 10000
+  },
+  description: {
+    type: String,
+    trim: true,
+    maxlength: 500,
+    default: ''
+  },
+  tags: [{
+    type: String,
+    trim: true,
+    maxlength: 50
+  }],
+  category: {
+    type: String,
+    enum: ['research', 'regulatory', 'clinical', 'analysis', 'general', 'custom'],
+    default: 'custom'
+  },
+  isPublic: {
+    type: Boolean,
+    default: false
+  },
+  isFavorite: {
+    type: Boolean,
+    default: false
+  },
+  usageCount: {
+    type: Number,
+    default: 0
+  },
+  lastUsedAt: {
+    type: Date
+  },
+  sourceConversationId: {
+    type: String,
+    default: null
+  }
+}, {
+  timestamps: true,
+  collection: 'LEAF_AI_prompts'
+});
+
+// Create indexes
+promptSchema.index({ userId: 1, createdAt: -1 });
+promptSchema.index({ userId: 1, isFavorite: -1 });
+promptSchema.index({ userId: 1, category: 1 });
+
+const Prompt = mongoose.model('Prompt', promptSchema);
+
+// All routes require authentication
+router.use(requireAuth);
+
+// ============================================
+// LIST PROMPTS
+// ============================================
+
+/**
+ * GET /api/user/prompts
+ * Get paginated list of user's prompts
+ */
+router.get('/', async (req, res) => {
+  try {
+    const {
+      limit = 50,
+      skip = 0,
+      category,
+      favorite,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+    
+    const query = { userId: req.user._id };
+    
+    // Filter by category
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    
+    // Filter by favorite
+    if (favorite === 'true') {
+      query.isFavorite = true;
+    }
+    
+    // Search in title and description
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { content: { $regex: search, $options: 'i' } },
+        { tags: { $in: [new RegExp(search, 'i')] } }
+      ];
+    }
+    
+    const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+    
+    const prompts = await Prompt.find(query)
+      .sort(sort)
+      .skip(parseInt(skip))
+      .limit(Math.min(parseInt(limit), 100))
+      .lean();
+    
+    const total = await Prompt.countDocuments(query);
+    
+    res.json({
+      success: true,
+      prompts,
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        skip: parseInt(skip),
+        hasMore: parseInt(skip) + prompts.length < total
+      }
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] List error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch prompts'
+    });
+  }
+});
+
+// ============================================
+// GET SINGLE PROMPT
+// ============================================
+
+/**
+ * GET /api/user/prompts/:promptId
+ * Get a single prompt by ID
+ */
+router.get('/:promptId', async (req, res) => {
+  try {
+    const { promptId } = req.params;
+    
+    const prompt = await Prompt.findOne({
+      _id: promptId,
+      userId: req.user._id
+    }).lean();
+    
+    if (!prompt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prompt not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      prompt
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] Get error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch prompt'
+    });
+  }
+});
+
+// ============================================
+// CREATE PROMPT
+// ============================================
+
+/**
+ * POST /api/user/prompts
+ * Create a new prompt
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { 
+      title, 
+      content, 
+      description, 
+      tags, 
+      category,
+      sourceConversationId 
+    } = req.body;
+    
+    if (!title || !content) {
+      return res.status(400).json({
+        success: false,
+        error: 'Title and content are required'
+      });
+    }
+    
+    // Check for duplicate title for this user
+    const existing = await Prompt.findOne({
+      userId: req.user._id,
+      title: { $regex: new RegExp(`^${title}$`, 'i') }
+    });
+    
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: 'A prompt with this title already exists'
+      });
+    }
+    
+    const prompt = new Prompt({
+      userId: req.user._id,
+      title: title.substring(0, 200),
+      content: content.substring(0, 10000),
+      description: description?.substring(0, 500) || '',
+      tags: (tags || []).slice(0, 10).map(t => t.substring(0, 50)),
+      category: category || 'custom',
+      sourceConversationId
+    });
+    
+    await prompt.save();
+    
+    res.status(201).json({
+      success: true,
+      prompt: {
+        id: prompt._id,
+        title: prompt.title,
+        content: prompt.content,
+        description: prompt.description,
+        tags: prompt.tags,
+        category: prompt.category,
+        createdAt: prompt.createdAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] Create error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create prompt'
+    });
+  }
+});
+
+// ============================================
+// UPDATE PROMPT
+// ============================================
+
+/**
+ * PUT /api/user/prompts/:promptId
+ * Update an existing prompt
+ */
+router.put('/:promptId', async (req, res) => {
+  try {
+    const { promptId } = req.params;
+    const { title, content, description, tags, category, isFavorite } = req.body;
+    
+    const prompt = await Prompt.findOne({
+      _id: promptId,
+      userId: req.user._id
+    });
+    
+    if (!prompt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prompt not found'
+      });
+    }
+    
+    // Update fields if provided
+    if (title !== undefined) prompt.title = title.substring(0, 200);
+    if (content !== undefined) prompt.content = content.substring(0, 10000);
+    if (description !== undefined) prompt.description = description.substring(0, 500);
+    if (tags !== undefined) prompt.tags = tags.slice(0, 10).map(t => t.substring(0, 50));
+    if (category !== undefined) prompt.category = category;
+    if (isFavorite !== undefined) prompt.isFavorite = isFavorite;
+    
+    await prompt.save();
+    
+    res.json({
+      success: true,
+      prompt: {
+        id: prompt._id,
+        title: prompt.title,
+        content: prompt.content,
+        description: prompt.description,
+        tags: prompt.tags,
+        category: prompt.category,
+        isFavorite: prompt.isFavorite,
+        updatedAt: prompt.updatedAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] Update error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update prompt'
+    });
+  }
+});
+
+// ============================================
+// DELETE PROMPT
+// ============================================
+
+/**
+ * DELETE /api/user/prompts/:promptId
+ * Delete a prompt
+ */
+router.delete('/:promptId', async (req, res) => {
+  try {
+    const { promptId } = req.params;
+    
+    const result = await Prompt.deleteOne({
+      _id: promptId,
+      userId: req.user._id
+    });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prompt not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Prompt deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] Delete error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete prompt'
+    });
+  }
+});
+
+// ============================================
+// RECORD PROMPT USAGE
+// ============================================
+
+/**
+ * POST /api/user/prompts/:promptId/use
+ * Record that a prompt was used
+ */
+router.post('/:promptId/use', async (req, res) => {
+  try {
+    const { promptId } = req.params;
+    
+    const prompt = await Prompt.findOneAndUpdate(
+      { _id: promptId, userId: req.user._id },
+      { 
+        $inc: { usageCount: 1 },
+        lastUsedAt: new Date()
+      },
+      { new: true }
+    );
+    
+    if (!prompt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prompt not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      usageCount: prompt.usageCount
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] Usage error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to record usage'
+    });
+  }
+});
+
+// ============================================
+// TOGGLE FAVORITE
+// ============================================
+
+/**
+ * POST /api/user/prompts/:promptId/favorite
+ * Toggle favorite status
+ */
+router.post('/:promptId/favorite', async (req, res) => {
+  try {
+    const { promptId } = req.params;
+    
+    const prompt = await Prompt.findOne({
+      _id: promptId,
+      userId: req.user._id
+    });
+    
+    if (!prompt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Prompt not found'
+      });
+    }
+    
+    prompt.isFavorite = !prompt.isFavorite;
+    await prompt.save();
+    
+    res.json({
+      success: true,
+      isFavorite: prompt.isFavorite
+    });
+    
+  } catch (error) {
+    console.error('[PROMPTS] Favorite error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to toggle favorite'
+    });
+  }
+});
+
+// ============================================
+// EXPORTS
+// ============================================
+
+module.exports = router;

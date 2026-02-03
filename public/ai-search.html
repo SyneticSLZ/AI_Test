@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Physician Search | SyneticX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['DM Sans', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+    
+    body {
+      background: linear-gradient(145deg, #f8f7fc 0%, #f3f1f9 30%, #eef6f9 60%, #f9f5f8 100%);
+      min-height: 100vh;
+    }
+    
+    .gradient-mesh {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background: 
+        radial-gradient(ellipse 80% 50% at 20% 40%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 60% at 80% 30%, rgba(34, 197, 94, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 50% at 50% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+    }
+    
+    .glass {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    
+    .ai-gradient {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+    }
+    
+    .ai-gradient-text {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .search-box {
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid rgba(99, 102, 241, 0.2);
+      box-shadow: 0 8px 32px -8px rgba(99, 102, 241, 0.15);
+      transition: all 0.3s ease;
+    }
+    
+    .search-box:focus-within {
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: 0 12px 40px -8px rgba(99, 102, 241, 0.25);
+    }
+    
+    .ai-thinking {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .typing-indicator span {
+      animation: typing 1.4s infinite ease-in-out;
+    }
+    .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
+    }
+    
+    /* Markdown styling */
+    .markdown-content h1 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 1rem; color: #1e293b; }
+    .markdown-content h2 { font-size: 1.25rem; font-weight: 600; margin: 1.25rem 0 0.75rem; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; }
+    .markdown-content h3 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #475569; }
+    .markdown-content p { margin: 0.5rem 0; line-height: 1.6; }
+    .markdown-content ul { margin: 0.5rem 0; padding-left: 1.5rem; }
+    .markdown-content li { margin: 0.25rem 0; }
+    .markdown-content strong { font-weight: 600; color: #1e293b; }
+    .markdown-content code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875rem; }
+    .markdown-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+    .markdown-content th { background: #f8fafc; padding: 0.5rem; text-align: left; font-weight: 600; border: 1px solid #e2e8f0; }
+    .markdown-content td { padding: 0.5rem; border: 1px solid #e2e8f0; }
+    .markdown-content blockquote { border-left: 3px solid #6366f1; padding-left: 1rem; margin: 1rem 0; color: #64748b; }
+    .markdown-content hr { margin: 1.5rem 0; border: none; border-top: 1px solid #e2e8f0; }
+    
+    /* Code blocks */
+    .code-block {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.875rem;
+    }
+    
+    /* Badge styles */
+    .badge { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    .badge-high { background: #dcfce7; color: #166534; }
+    .badge-medium { background: #fef3c7; color: #92400e; }
+    .badge-low { background: #fee2e2; color: #991b1b; }
+    .badge-info { background: #dbeafe; color: #1e40af; }
+    
+    /* Toast */
+    .toast { animation: toastSlide 0.3s ease; }
+    @keyframes toastSlide {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    /* Loading shimmer */
+    .shimmer {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.02); }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.2); }
+    
+    /* Tab styles */
+    .tab-btn { transition: all 0.2s ease; }
+    .tab-btn.active { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    
+    /* Data table */
+    .data-table { background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(0, 0, 0, 0.06); }
+    .data-table thead { background: rgba(0, 0, 0, 0.02); }
+    .data-table tbody tr { border-bottom: 1px solid rgba(0, 0, 0, 0.04); transition: background 0.15s ease; cursor: pointer; }
+    .data-table tbody tr:hover { background: rgba(99, 102, 241, 0.04); }
+  </style>
+</head>
+<body class="min-h-screen text-zinc-800">
+  <div class="gradient-mesh"></div>
+  
+  <div class="relative z-10 min-h-screen">
+    
+    <!-- Header -->
+    <header class="glass border-b border-gray-200/50 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <a href="/" class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl ai-gradient flex items-center justify-center shadow-lg">
+              <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+              </svg>
+            </div>
+            <div>
+              <span class="font-bold text-gray-900">AI Physician Search</span>
+              <span class="text-xs text-gray-500 block">Powered by GPT-4</span>
+            </div>
+          </a>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="/new.html" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            Classic Search
+          </a>
+          <button onclick="checkAIStatus()" class="px-3 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="AI Status">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+      
+      <!-- Search Section -->
+      <section id="searchSection" class="mb-8">
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-full text-indigo-700 text-sm font-medium mb-4">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+            AI-Powered Physician Discovery
+          </div>
+          <h1 class="text-3xl font-bold text-gray-900 mb-3">
+            Find physicians with <span class="ai-gradient-text">natural language</span>
+          </h1>
+          <p class="text-gray-600 max-w-2xl mx-auto">
+            Describe the condition, procedure, or treatment in plain English. 
+            Our AI will map it to medical billing codes and find matching physicians.
+          </p>
+        </div>
+        
+        <!-- Search Box -->
+        <div class="max-w-3xl mx-auto">
+          <div class="search-box rounded-2xl p-2">
+            <div class="flex items-center gap-3">
+              <div class="flex-shrink-0 w-10 h-10 rounded-xl ai-gradient flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+              </div>
+              <input 
+                type="text" 
+                id="aiSearchInput" 
+                placeholder="e.g., doctors who treat IgA nephropathy, kidney biopsy specialists, lupus kidney disease..."
+                class="flex-1 px-2 py-3 bg-transparent text-gray-800 placeholder-gray-400 border-0 focus:outline-none text-lg"
+                onkeypress="if(event.key==='Enter') performAISearch()"
+              >
+              <button 
+                onclick="performAISearch()" 
+                id="searchButton"
+                class="flex-shrink-0 px-6 py-3 ai-gradient text-white rounded-xl font-semibold transition-all hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                Search
+              </button>
+            </div>
+          </div>
+          
+          <!-- Quick Examples -->
+          <div class="flex flex-wrap justify-center gap-2 mt-4">
+            <span class="text-sm text-gray-500">Try:</span>
+            <button onclick="setSearchQuery('IgA nephropathy')" class="px-3 py-1 text-sm bg-white hover:bg-gray-50 text-indigo-600 rounded-full border border-indigo-200 transition-colors">IgA nephropathy</button>
+            <button onclick="setSearchQuery('doctors who treat lupus kidney disease')" class="px-3 py-1 text-sm bg-white hover:bg-gray-50 text-indigo-600 rounded-full border border-indigo-200 transition-colors">lupus kidney disease</button>
+            <button onclick="setSearchQuery('nephrologists performing kidney biopsies')" class="px-3 py-1 text-sm bg-white hover:bg-gray-50 text-indigo-600 rounded-full border border-indigo-200 transition-colors">kidney biopsies</button>
+            <button onclick="setSearchQuery('FSGS treatment specialists')" class="px-3 py-1 text-sm bg-white hover:bg-gray-50 text-indigo-600 rounded-full border border-indigo-200 transition-colors">FSGS</button>
+          </div>
+          
+          <!-- Filters Toggle -->
+          <div class="mt-4 text-center">
+            <button onclick="toggleFilters()" class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mx-auto">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+              <span id="filterToggleText">Show Filters</span>
+            </button>
+          </div>
+          
+          <!-- Filters Panel -->
+          <div id="filtersPanel" class="hidden mt-4 glass rounded-xl p-5 border border-gray-200">
+            <div class="grid grid-cols-4 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">State</label>
+                <select id="filterState" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+                  <option value="">All States</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Specialty</label>
+                <select id="filterSpecialty" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+                  <option value="">AI Recommended</option>
+                  <option value="Nephrology">Nephrology</option>
+                  <option value="Internal Medicine">Internal Medicine</option>
+                  <option value="Cardiology">Cardiology</option>
+                  <option value="Rheumatology">Rheumatology</option>
+                  <option value="Endocrinology">Endocrinology</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Min. Beneficiaries</label>
+                <input type="number" id="filterMinBene" value="50" min="11" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Data Year</label>
+                <select id="filterYear" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+                  <option value="2023">2023</option>
+                  <option value="2022">2022</option>
+                  <option value="2021">2021</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- AI Loading State -->
+      <section id="loadingSection" class="hidden mb-8">
+        <div class="max-w-3xl mx-auto text-center">
+          <div class="glass rounded-2xl p-8 border border-indigo-100">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl ai-gradient flex items-center justify-center ai-thinking">
+              <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">AI is analyzing your query</h3>
+            <p class="text-gray-600 mb-4" id="loadingStatus">Identifying medical condition...</p>
+            <div class="flex justify-center gap-1 typing-indicator">
+              <span class="w-2 h-2 bg-indigo-500 rounded-full"></span>
+              <span class="w-2 h-2 bg-indigo-500 rounded-full"></span>
+              <span class="w-2 h-2 bg-indigo-500 rounded-full"></span>
+            </div>
+            <div class="mt-6 text-sm text-gray-500">
+              <div class="flex items-center justify-center gap-4">
+                <span id="step1" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> Parsing query</span>
+                <span id="step2" class="flex items-center gap-1 text-gray-400"><span class="w-2 h-2 rounded-full bg-gray-300"></span> Mapping codes</span>
+                <span id="step3" class="flex items-center gap-1 text-gray-400"><span class="w-2 h-2 rounded-full bg-gray-300"></span> Searching physicians</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Results Section -->
+      <section id="resultsSection" class="hidden">
+        
+        <!-- Results Header -->
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-gray-900" id="resultsTitle">Search Results</h2>
+            <p class="text-sm text-gray-500" id="resultsSubtitle">Loading...</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500" id="resultsCount">0 physicians</span>
+            <button onclick="exportResults()" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              Export
+            </button>
+          </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="flex gap-1 p-1 bg-gray-100 rounded-xl mb-6 w-fit">
+          <button onclick="switchTab('report')" id="tab-report" class="tab-btn active px-4 py-2 text-sm font-medium text-gray-700 rounded-lg transition-colors">
+            🤖 AI Report
+          </button>
+          <button onclick="switchTab('codes')" id="tab-codes" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 rounded-lg transition-colors">
+            📋 Codes Used
+          </button>
+          <button onclick="switchTab('physicians')" id="tab-physicians" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 rounded-lg transition-colors">
+            👨‍⚕️ Physicians
+          </button>
+        </div>
+        
+        <!-- Tab Content -->
+        <div id="tabContent">
+          
+          <!-- AI Report Tab -->
+          <div id="content-report" class="tab-content">
+            <div class="glass rounded-xl border border-gray-200 overflow-hidden">
+              <div class="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg ai-gradient flex items-center justify-center">
+                      <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+                    </div>
+                    <div>
+                      <h3 class="font-semibold text-gray-900">AI Code Mapping Report</h3>
+                      <p class="text-sm text-gray-600">Generated analysis with sources and confidence levels</p>
+                    </div>
+                  </div>
+                  <div id="confidenceBadge" class="badge badge-high">High Confidence</div>
+                </div>
+              </div>
+              <div id="reportContent" class="p-6 markdown-content max-h-[600px] overflow-y-auto">
+                <!-- Markdown report will be rendered here -->
+              </div>
+              <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div class="flex items-center justify-between text-sm text-gray-500">
+                  <span id="reportMeta">Generated by GPT-4 with File Search & Web Search</span>
+                  <span id="reportTime">Processing time: --</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Codes Tab -->
+          <div id="content-codes" class="tab-content hidden">
+            <div class="grid grid-cols-3 gap-6">
+              <!-- ICD-10 Codes -->
+              <div class="glass rounded-xl border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
+                  <h3 class="font-semibold text-blue-900">ICD-10-CM Diagnosis Codes</h3>
+                </div>
+                <div id="icd10Codes" class="p-4 space-y-2 max-h-80 overflow-y-auto">
+                  <!-- Codes will be populated here -->
+                </div>
+              </div>
+              
+              <!-- CPT Codes -->
+              <div class="glass rounded-xl border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 bg-green-50 border-b border-green-100">
+                  <h3 class="font-semibold text-green-900">CPT Procedure Codes</h3>
+                </div>
+                <div id="cptCodes" class="p-4 space-y-2 max-h-80 overflow-y-auto">
+                  <!-- Codes will be populated here -->
+                </div>
+              </div>
+              
+              <!-- HCPCS Codes -->
+              <div class="glass rounded-xl border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 bg-purple-50 border-b border-purple-100">
+                  <h3 class="font-semibold text-purple-900">HCPCS Drug Codes</h3>
+                </div>
+                <div id="hcpcsCodes" class="p-4 space-y-2 max-h-80 overflow-y-auto">
+                  <!-- Codes will be populated here -->
+                </div>
+              </div>
+            </div>
+            
+            <!-- Search Strategy -->
+            <div class="mt-6 glass rounded-xl border border-gray-200 p-4">
+              <h4 class="font-semibold text-gray-900 mb-2">🔍 Search Strategy Applied</h4>
+              <div id="searchStrategy" class="text-sm text-gray-600">
+                <!-- Strategy will be populated here -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- Physicians Tab -->
+          <div id="content-physicians" class="tab-content hidden">
+            <div class="data-table rounded-xl overflow-hidden">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b border-gray-200">
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Physician</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Specialty</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Beneficiaries</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Services</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Matched Codes</th>
+                  </tr>
+                </thead>
+                <tbody id="physiciansTable">
+                  <!-- Physicians will be populated here -->
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="flex items-center justify-between mt-4">
+              <div class="text-sm text-gray-500" id="paginationInfo">Showing 1-50 of 100</div>
+              <div class="flex gap-2">
+                <button onclick="prevPage()" id="prevBtn" disabled class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">← Previous</button>
+                <button onclick="nextPage()" id="nextBtn" disabled class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">Next →</button>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </section>
+      
+      <!-- Empty State -->
+      <section id="emptyState" class="text-center py-16">
+        <div class="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
+          <svg class="w-12 h-12 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">Describe what you're looking for</h3>
+        <p class="text-gray-600 max-w-md mx-auto mb-6">
+          Use natural language to describe a medical condition, procedure, or treatment. 
+          Our AI will find the right physicians from Medicare claims data.
+        </p>
+        <div class="flex flex-wrap justify-center gap-3">
+          <div class="px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-600">
+            ✓ Understands medical terminology
+          </div>
+          <div class="px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-600">
+            ✓ Handles synonyms & abbreviations
+          </div>
+          <div class="px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-600">
+            ✓ Explains its reasoning
+          </div>
+        </div>
+      </section>
+      
+    </main>
+    
+    <!-- Footer -->
+    <footer class="border-t border-gray-200 mt-12">
+      <div class="max-w-7xl mx-auto px-6 py-6">
+        <div class="flex items-center justify-between text-sm text-gray-500">
+          <div>
+            <span>Data Source: CMS Medicare Physician PUF 2023</span>
+            <span class="mx-2">•</span>
+            <span>AI Model: GPT-4 with File Search & Web Search</span>
+          </div>
+          <div>
+            <span class="text-amber-600 flex items-center gap-1">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+              AI-generated codes. Always verify before clinical use.
+            </span>
+          </div>
+        </div>
+      </div>
+    </footer>
+    
+  </div>
+  
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+  
+  <script>
+    // State
+    let currentResults = null;
+    let currentPhysicians = [];
+    let currentPage = 1;
+    const pageSize = 50;
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStates();
+      
+      // Check for query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const query = urlParams.get('q');
+      if (query) {
+        document.getElementById('aiSearchInput').value = query;
+        performAISearch();
+      }
+    });
+    
+    // Load states dropdown
+    async function loadStates() {
+      try {
+        const res = await fetch('/api/reference/states');
+        const data = await res.json();
+        const select = document.getElementById('filterState');
+        data.states.forEach(state => {
+          const opt = document.createElement('option');
+          opt.value = state;
+          opt.textContent = state;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Failed to load states:', err);
+      }
+    }
+    
+    // Set search query
+    function setSearchQuery(query) {
+      document.getElementById('aiSearchInput').value = query;
+      document.getElementById('aiSearchInput').focus();
+    }
+    
+    // Toggle filters
+    function toggleFilters() {
+      const panel = document.getElementById('filtersPanel');
+      const text = document.getElementById('filterToggleText');
+      panel.classList.toggle('hidden');
+      text.textContent = panel.classList.contains('hidden') ? 'Show Filters' : 'Hide Filters';
+    }
+    
+    // Main AI Search
+    async function performAISearch() {
+      const query = document.getElementById('aiSearchInput').value.trim();
+      
+      if (!query) {
+        showToast('Please enter a search query', 'warning');
+        return;
+      }
+      
+      // Get filters
+      const filters = {
+        state: document.getElementById('filterState').value,
+        specialty: document.getElementById('filterSpecialty').value,
+        minBeneficiaries: parseInt(document.getElementById('filterMinBene').value) || 50,
+      };
+      const year = document.getElementById('filterYear').value;
+      
+      // Show loading
+      showLoading();
+      
+      try {
+        // Update loading steps
+        updateLoadingStep(1, 'Parsing query and identifying condition...');
+        
+        // Call AI endpoint
+        const response = await fetch('/api/ai/search-physicians', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, filters, year }),
+        });
+        
+        updateLoadingStep(2, 'Mapping medical codes...');
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Search failed');
+        }
+        
+        updateLoadingStep(3, 'Fetching physician data...');
+        
+        // Store results
+        currentResults = data;
+        currentPhysicians = data.physicians || [];
+        currentPage = 1;
+        
+        // Render results
+        await new Promise(r => setTimeout(r, 500)); // Brief delay for UX
+        renderResults();
+        
+      } catch (error) {
+        console.error('AI Search error:', error);
+        showToast(`Search failed: ${error.message}`, 'error');
+        hideLoading();
+      }
+    }
+    
+    // Show loading state
+    function showLoading() {
+      document.getElementById('searchSection').classList.add('hidden');
+      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('resultsSection').classList.add('hidden');
+      document.getElementById('loadingSection').classList.remove('hidden');
+    }
+    
+    // Hide loading state
+    function hideLoading() {
+      document.getElementById('loadingSection').classList.add('hidden');
+      document.getElementById('searchSection').classList.remove('hidden');
+    }
+    
+    // Update loading step
+    function updateLoadingStep(step, message) {
+      document.getElementById('loadingStatus').textContent = message;
+      
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`step${i}`);
+        if (i < step) {
+          el.classList.remove('text-gray-400');
+          el.querySelector('span').classList.remove('bg-gray-300');
+          el.querySelector('span').classList.add('bg-green-500');
+        } else if (i === step) {
+          el.classList.remove('text-gray-400');
+          el.querySelector('span').classList.remove('bg-gray-300');
+          el.querySelector('span').classList.add('bg-indigo-500');
+        } else {
+          el.classList.add('text-gray-400');
+        }
+      }
+    }
+    
+    // Render results
+    function renderResults() {
+      document.getElementById('loadingSection').classList.add('hidden');
+      document.getElementById('searchSection').classList.remove('hidden');
+      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('resultsSection').classList.remove('hidden');
+      
+      const codeMapping = currentResults.codeMapping || {};
+      const condition = codeMapping.condition || {};
+      
+      // Update header
+      document.getElementById('resultsTitle').textContent = condition.name || 'Search Results';
+      document.getElementById('resultsSubtitle').textContent = condition.description || currentResults.query;
+      document.getElementById('resultsCount').textContent = `${currentPhysicians.length} physicians found`;
+      
+      // Set confidence badge
+      const confidence = codeMapping.confidence || 'medium';
+      const badge = document.getElementById('confidenceBadge');
+      badge.textContent = `${confidence.charAt(0).toUpperCase() + confidence.slice(1)} Confidence`;
+      badge.className = `badge badge-${confidence}`;
+      
+      // Render report
+      renderReport(codeMapping.report || 'No report generated');
+      
+      // Render codes
+      renderCodes(codeMapping.codes || {});
+      
+      // Render search strategy
+      renderSearchStrategy();
+      
+      // Render physicians
+      renderPhysicians();
+      
+      // Update meta
+      document.getElementById('reportTime').textContent = `Processing time: ${currentResults.metadata?.processingTime || '--'}ms`;
+      
+      // Show report tab by default
+      switchTab('report');
+    }
+    
+    // Render markdown report
+    function renderReport(markdown) {
+      const container = document.getElementById('reportContent');
+      try {
+        container.innerHTML = marked.parse(markdown);
+      } catch (err) {
+        container.innerHTML = `<pre class="whitespace-pre-wrap">${markdown}</pre>`;
+      }
+    }
+    
+    // Render codes
+    function renderCodes(codes) {
+      // ICD-10
+      const icd10Container = document.getElementById('icd10Codes');
+      icd10Container.innerHTML = (codes.icd10 || []).map(c => `
+        <div class="p-3 bg-blue-50 rounded-lg">
+          <div class="flex items-center justify-between mb-1">
+            <code class="text-sm font-semibold text-blue-900">${c.code}</code>
+            <span class="badge badge-${c.confidence}">${c.confidence}</span>
+          </div>
+          <p class="text-sm text-gray-700">${c.description || 'No description'}</p>
+          ${c.rationale ? `<p class="text-xs text-gray-500 mt-1">${c.rationale}</p>` : ''}
+        </div>
+      `).join('') || '<p class="text-sm text-gray-500">No ICD-10 codes identified</p>';
+      
+      // CPT
+      const cptContainer = document.getElementById('cptCodes');
+      cptContainer.innerHTML = (codes.cpt || []).map(c => `
+        <div class="p-3 bg-green-50 rounded-lg">
+          <div class="flex items-center justify-between mb-1">
+            <code class="text-sm font-semibold text-green-900">${c.code}</code>
+            <span class="badge badge-${c.confidence}">${c.confidence}</span>
+          </div>
+          <p class="text-sm text-gray-700">${c.description || 'No description'}</p>
+          ${c.rationale ? `<p class="text-xs text-gray-500 mt-1">${c.rationale}</p>` : ''}
+        </div>
+      `).join('') || '<p class="text-sm text-gray-500">No CPT codes identified</p>';
+      
+      // HCPCS
+      const hcpcsContainer = document.getElementById('hcpcsCodes');
+      hcpcsContainer.innerHTML = (codes.hcpcs || []).map(c => `
+        <div class="p-3 bg-purple-50 rounded-lg">
+          <div class="flex items-center justify-between mb-1">
+            <code class="text-sm font-semibold text-purple-900">${c.code}</code>
+            <span class="badge badge-${c.confidence}">${c.confidence}</span>
+          </div>
+          <p class="text-sm text-gray-700">${c.description || 'No description'}</p>
+          ${c.rationale ? `<p class="text-xs text-gray-500 mt-1">${c.rationale}</p>` : ''}
+        </div>
+      `).join('') || '<p class="text-sm text-gray-500">No HCPCS codes identified</p>';
+    }
+    
+    // Render search strategy
+    function renderSearchStrategy() {
+      const container = document.getElementById('searchStrategy');
+      const filters = currentResults.filters || {};
+      
+      container.innerHTML = `
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <span class="font-medium">Specialties:</span>
+            <p>${(filters.aiAppliedSpecialties || []).join(', ') || 'All'}</p>
+          </div>
+          <div>
+            <span class="font-medium">Codes Used:</span>
+            <p>${(filters.aiAppliedCodes || []).slice(0, 5).join(', ') || 'None'}${(filters.aiAppliedCodes || []).length > 5 ? ` +${filters.aiAppliedCodes.length - 5} more` : ''}</p>
+          </div>
+          <div>
+            <span class="font-medium">Search Method:</span>
+            <p>${currentResults.searchMethod || 'Unknown'}</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Render physicians table
+    function renderPhysicians() {
+      const tbody = document.getElementById('physiciansTable');
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      const pageData = currentPhysicians.slice(start, end);
+      
+      if (pageData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="px-4 py-12 text-center text-gray-500">
+              No physicians found matching your criteria
+            </td>
+          </tr>
+        `;
+        return;
+      }
+      
+      tbody.innerHTML = pageData.map(p => {
+        const name = p.fullName || p.name || p.providerName || 'Unknown';
+        const specialty = p.specialty || '-';
+        const city = p.city || p.location?.city || '';
+        const state = p.state || p.location?.state || '';
+        const location = city && state ? `${city}, ${state}` : (city || state || '-');
+        const benes = p.totalMatchedBeneficiaries || p.beneficiaries || p.totalBeneficiaries || 0;
+        const services = p.totalMatchedServices || p.services || p.totalServices || 0;
+        const codes = p.matchedCodes || [];
+        
+        return `
+          <tr onclick="viewPhysician('${p.npi}')">
+            <td class="px-4 py-3">
+              <div class="font-medium text-gray-900">${name}</div>
+              <div class="text-xs text-gray-500">${p.credentials || ''}</div>
+            </td>
+            <td class="px-4 py-3 text-sm text-gray-600">${specialty}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${location}</td>
+            <td class="px-4 py-3 text-right font-medium text-gray-900">${benes.toLocaleString()}</td>
+            <td class="px-4 py-3 text-right text-gray-600">${services.toLocaleString()}</td>
+            <td class="px-4 py-3 text-right">
+              ${codes.length > 0 ? `<span class="badge badge-info">${codes.length} codes</span>` : '-'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+      
+      // Update pagination
+      const totalPages = Math.ceil(currentPhysicians.length / pageSize);
+      document.getElementById('paginationInfo').textContent = `Showing ${start + 1}-${Math.min(end, currentPhysicians.length)} of ${currentPhysicians.length}`;
+      document.getElementById('prevBtn').disabled = currentPage <= 1;
+      document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+    }
+    
+    // Tab switching
+    function switchTab(tab) {
+      // Update tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.add('text-gray-500');
+        btn.classList.remove('text-gray-700');
+      });
+      const activeBtn = document.getElementById(`tab-${tab}`);
+      activeBtn.classList.add('active');
+      activeBtn.classList.remove('text-gray-500');
+      activeBtn.classList.add('text-gray-700');
+      
+      // Update content
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+      document.getElementById(`content-${tab}`).classList.remove('hidden');
+    }
+    
+    // Pagination
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        renderPhysicians();
+      }
+    }
+    
+    function nextPage() {
+      const totalPages = Math.ceil(currentPhysicians.length / pageSize);
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderPhysicians();
+      }
+    }
+    
+    // View physician details
+    function viewPhysician(npi) {
+      // Open in new tab or navigate
+      window.open(`/new.html?npi=${npi}`, '_blank');
+    }
+    
+    // Export results
+    function exportResults() {
+      if (!currentResults || !currentPhysicians.length) {
+        showToast('No results to export', 'warning');
+        return;
+      }
+      
+      // Create CSV
+      const headers = ['NPI', 'Name', 'Credentials', 'Specialty', 'City', 'State', 'Beneficiaries', 'Services', 'Matched Codes'];
+      const rows = currentPhysicians.map(p => [
+        p.npi || '',
+        `"${p.fullName || p.name || ''}"`,
+        p.credentials || '',
+        `"${p.specialty || ''}"`,
+        `"${p.city || p.location?.city || ''}"`,
+        p.state || p.location?.state || '',
+        p.totalMatchedBeneficiaries || p.beneficiaries || '',
+        p.totalMatchedServices || p.services || '',
+        `"${(p.matchedCodes || []).join(', ')}"`,
+      ].join(','));
+      
+      const csv = [headers.join(','), ...rows].join('\n');
+      
+      // Download
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ai_physician_search_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showToast('Export downloaded', 'success');
+    }
+    
+    // Check AI status
+    async function checkAIStatus() {
+      try {
+        const res = await fetch('/api/ai/status');
+        const data = await res.json();
+        
+        if (data.success) {
+          const status = data.status === 'operational' ? '✅ AI System Operational' : '⚠️ AI System Degraded';
+          const vectorStore = data.vectorStore?.status === 'active' 
+            ? `✅ Vector Store Active (${data.vectorStore.fileCount} files)` 
+            : '⚠️ Vector Store: Web Search Only';
+          
+          showToast(`${status}\n${vectorStore}`, 'success');
+        } else {
+          showToast(`AI Status: ${data.error}`, 'error');
+        }
+      } catch (err) {
+        showToast(`Failed to check AI status: ${err.message}`, 'error');
+      }
+    }
+    
+    // Toast notification
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        error: 'bg-red-500',
+        warning: 'bg-amber-500',
+        success: 'bg-green-500',
+        info: 'bg-indigo-500',
+      };
+      toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium max-w-sm whitespace-pre-line`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+  </script>
+</body>
+</html>

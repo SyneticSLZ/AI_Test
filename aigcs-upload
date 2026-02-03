@@ -1,0 +1,256 @@
+// backend/gcs-upload.js - HYBRID VERSION (Local + GCS)
+const { Storage } = require('@google-cloud/storage');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+const fs = require('fs');
+
+// Initialize GCS client
+const storage = new Storage({
+    projectId: process.env.GOOGLE_CLOUD_PROJECT
+});
+const bucketName = process.env.GCS_BUCKET_NAME || 'leaf-app-uploads';
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// ============================================
+// HYBRID STORAGE: Save BOTH Local + GCS
+// ============================================
+class HybridStorage {
+    constructor(opts) {
+        this.bucket = storage.bucket(opts.bucket);
+        this.destination = opts.destination || 'uploads/';
+        this.localDir = opts.localDir || uploadsDir;
+    }
+
+    _handleFile(req, file, cb) {
+        const filename = `${uuidv4()}${path.extname(file.originalname)}`;
+        const gcsPath = `${this.destination}${filename}`;
+        const localPath = path.join(this.localDir, filename);
+        
+        // Save to local disk first
+        const localStream = fs.createWriteStream(localPath);
+        
+        localStream.on('error', (err) => {
+            console.error('[Hybrid Upload] Local save error:', err);
+            cb(err);
+        });
+
+        localStream.on('finish', () => {
+            console.log(`[Hybrid Upload] ✅ Saved locally: ${localPath}`);
+            
+            // Now upload to GCS
+            const gcsFile = this.bucket.file(gcsPath);
+            const gcsStream = gcsFile.createWriteStream({
+                resumable: false,
+                metadata: {
+                    contentType: file.mimetype,
+                    metadata: {
+                        originalName: file.originalname,
+                        uploadedBy: req.user?._id?.toString() || 'unknown',
+                        uploadedAt: new Date().toISOString()
+                    }
+                }
+            });
+
+            gcsStream.on('error', (err) => {
+                console.error('[Hybrid Upload] GCS upload error:', err);
+                // Don't fail - local file exists
+                console.warn('[Hybrid Upload] ⚠️ GCS upload failed, but local file exists');
+            });
+
+            gcsStream.on('finish', () => {
+                console.log(`[Hybrid Upload] ✅ Uploaded to GCS: ${gcsPath}`);
+            });
+
+            // Read local file and pipe to GCS
+            fs.createReadStream(localPath).pipe(gcsStream);
+
+            // Return local path for immediate processing
+            cb(null, {
+                path: localPath,              // Local path for processing
+                gcsPath: gcsPath,            // GCS path for database
+                filename: filename,
+                originalname: file.originalname,
+                mimetype: file.mimetype,
+                size: fs.statSync(localPath).size,
+                bucket: bucketName
+            });
+        });
+
+        // Pipe incoming file to local disk
+        file.stream.pipe(localStream);
+    }
+
+    _removeFile(req, file, cb) {
+        // Remove from local
+        if (file.path && fs.existsSync(file.path)) {
+            fs.unlink(file.path, (err) => {
+                if (err) console.warn('[Hybrid Upload] Could not delete local file:', err);
+            });
+        }
+        
+        // Remove from GCS
+        if (file.gcsPath) {
+            const gcsFile = this.bucket.file(file.gcsPath);
+            gcsFile.delete()
+                .then(() => cb(null))
+                .catch((err) => {
+                    console.warn('[Hybrid Upload] Could not delete GCS file:', err);
+                    cb(null); // Don't fail on cleanup errors
+                });
+        } else {
+            cb(null);
+        }
+    }
+}
+
+// ============================================
+// MULTER CONFIGURATION
+// ============================================
+// const hybridStorage = new HybridStorage({
+//     bucket: bucketName,
+//     destination: 'uploads/',
+//     localDir: uploadsDir
+// });
+
+// const upload = multer({
+//     storage: hybridStorage,
+//     limits: {
+//         fileSize: 50 * 1024 * 1024 // 50MB limit
+//     },
+//     fileFilter: (req, file, cb) => {
+//         const allowedTypes = /pdf|docx?|xlsx?|txt|csv|png|jpe?g/i;
+//         const isAllowed = allowedTypes.test(path.extname(file.originalname));
+        
+//         if (isAllowed) {
+//             cb(null, true);
+//         } else {
+//             cb(new Error('Invalid file type. Allowed: PDF, DOCX, XLSX, TXT, CSV, images'));
+//         }
+//     }
+// });
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+async function downloadFileToBuffer(gcsPath) {
+    try {
+        const file = storage.bucket(bucketName).file(gcsPath);
+        const [buffer] = await file.download();
+        return buffer;
+    } catch (error) {
+        console.error('[GCS Download] Error:', error);
+        throw new Error('Failed to download file from GCS');
+    }
+}
+
+async function downloadFileToTemp(gcsPath) {
+    try {
+        const buffer = await downloadFileToBuffer(gcsPath);
+        const tempPath = `/tmp/${uuidv4()}${path.extname(gcsPath)}`;
+        const fs = require('fs').promises;
+        await fs.writeFile(tempPath, buffer);
+        return tempPath;
+    } catch (error) {
+        console.error('[GCS Download to Temp] Error:', error);
+        throw new Error('Failed to download file to temp');
+    }
+}
+
+async function getSignedUrl(gcsPath, expiresInMinutes = 15) {
+    try {
+        const file = storage.bucket(bucketName).file(gcsPath);
+        const [url] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'read',
+            expires: Date.now() + expiresInMinutes * 60 * 1000
+        });
+        return url;
+    } catch (error) {
+        console.error('[GCS Signed URL] Error:', error);
+        throw new Error('Failed to generate signed URL');
+    }
+}
+
+async function streamFileToResponse(gcsPath, res, filename) {
+    try {
+        const file = storage.bucket(bucketName).file(gcsPath);
+        
+        // Get file metadata
+        const [metadata] = await file.getMetadata();
+        
+        // Set response headers
+        res.setHeader('Content-Type', metadata.contentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', metadata.size);
+        
+        // Stream the file
+        const readStream = file.createReadStream();
+        readStream.pipe(res);
+        
+        return new Promise((resolve, reject) => {
+            readStream.on('error', reject);
+            readStream.on('end', resolve);
+        });
+    } catch (error) {
+        console.error('[GCS Stream] Error:', error);
+        throw new Error('Failed to stream file from GCS');
+    }
+}
+
+async function deleteFile(gcsPath) {
+    try {
+        const file = storage.bucket(bucketName).file(gcsPath);
+        await file.delete();
+        console.log(`[GCS Delete] File deleted: ${gcsPath}`);
+    } catch (error) {
+        console.error('[GCS Delete] Error:', error);
+        throw new Error('Failed to delete file from GCS');
+    }
+}
+
+async function fileExists(gcsPath) {
+    try {
+        const file = storage.bucket(bucketName).file(gcsPath);
+        const [exists] = await file.exists();
+        return exists;
+    } catch (error) {
+        console.error('[GCS Exists Check] Error:', error);
+        return false;
+    }
+}
+
+async function uploadBuffer(buffer, gcsPath, metadata = {}) {
+    try {
+        const file = storage.bucket(bucketName).file(gcsPath);
+        await file.save(buffer, {
+            metadata: {
+                contentType: metadata.contentType || 'application/octet-stream',
+                metadata: metadata
+            }
+        });
+        return gcsPath;
+    } catch (error) {
+        console.error('[GCS Upload Buffer] Error:', error);
+        throw new Error('Failed to upload buffer to GCS');
+    }
+}
+
+module.exports = {
+   HybridStorage, 
+    storage,
+    bucketName,
+    downloadFileToBuffer,
+    downloadFileToTemp,
+    getSignedUrl,
+    streamFileToResponse,
+    deleteFile,
+    fileExists,
+    uploadBuffer
+};

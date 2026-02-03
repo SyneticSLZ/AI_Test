@@ -1,0 +1,477 @@
+/**
+ * ================================================================================
+ * LEAF INTELLIGENCE - CONVERSATION ROUTES
+ * ================================================================================
+ * 
+ * User conversation management:
+ * - GET    /api/user/conversations - List user's conversations
+ * - GET    /api/user/conversations/:id - Get conversation with messages
+ * - POST   /api/user/conversations - Create new conversation
+ * - PUT    /api/user/conversations/:id - Update conversation (title, status)
+ * - DELETE /api/user/conversations/:id - Delete/archive conversation
+ * - POST   /api/user/conversations/:id/messages - Add message to conversation
+ * 
+ * @version 1.0.0
+ */
+
+const express = require('express');
+const router = express.Router();
+
+const {
+  Conversation,
+  Message,
+  logActivity,
+  saveConversation,
+  saveMessage,
+  getUserConversations,
+  getConversationWithMessages
+} = require('./aidb');
+
+const { requireAuth, getClientIp } = require('./aiauthMiddleware');
+
+// All routes require authentication
+router.use(requireAuth);
+
+// ============================================
+// LIST CONVERSATIONS
+// ============================================
+
+/**
+ * GET /api/user/conversations
+ * Get paginated list of user's conversations
+ */
+router.get('/', async (req, res) => {
+  try {
+    const {
+      limit = 20,
+      skip = 0,
+      status = 'active',
+      sortBy = 'updatedAt',
+      search
+    } = req.query;
+    
+    const options = {
+      limit: Math.min(parseInt(limit), 100),
+      skip: parseInt(skip),
+      status,
+      sortBy,
+      sortOrder: -1
+    };
+    
+    const { conversations, total } = await getUserConversations(req.user._id, options);
+    
+    // If search query provided, filter by title
+    let filteredConversations = conversations;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredConversations = conversations.filter(c => 
+        c.title?.toLowerCase().includes(searchLower) ||
+        c.summary?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    res.json({
+      success: true,
+      conversations: filteredConversations,
+      pagination: {
+        total,
+        limit: options.limit,
+        skip: options.skip,
+        hasMore: options.skip + options.limit < total
+      }
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] List error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch conversations'
+    });
+  }
+});
+
+// ============================================
+// GET SINGLE CONVERSATION
+// ============================================
+
+/**
+ * GET /api/user/conversations/:conversationId
+ * Get conversation with all messages
+ */
+router.get('/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    const conversation = await getConversationWithMessages(conversationId, req.user._id);
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      conversation
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Get error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch conversation'
+    });
+  }
+});
+
+// ============================================
+// CREATE CONVERSATION
+// ============================================
+
+/**
+ * POST /api/user/conversations
+ * Create new conversation (usually done automatically on first query)
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { conversationId, title, initialQuery } = req.body;
+    
+    if (!conversationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Conversation ID is required'
+      });
+    }
+    
+    // Check if conversation already exists
+    const existing = await Conversation.findOne({ conversationId });
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: 'Conversation already exists'
+      });
+    }
+    
+    const conversation = await saveConversation(
+      req.user._id,
+      conversationId,
+      title || initialQuery?.substring(0, 100) || 'New Conversation'
+    );
+    
+    // Log activity
+    await logActivity(req.user._id, 'conversation_start', {
+      conversationId,
+      title: conversation.title
+    }, {
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent'],
+      conversationId
+    });
+    
+    res.status(201).json({
+      success: true,
+      conversation: {
+        id: conversation._id,
+        conversationId: conversation.conversationId,
+        title: conversation.title,
+        createdAt: conversation.createdAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Create error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create conversation'
+    });
+  }
+});
+
+// ============================================
+// UPDATE CONVERSATION
+// ============================================
+
+/**
+ * PUT /api/user/conversations/:conversationId
+ * Update conversation metadata (title, status, tags)
+ */
+router.put('/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { title, status, tags } = req.body;
+    
+    const conversation = await Conversation.findOne({
+      conversationId,
+      userId: req.user._id
+    });
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+    
+    // Update fields
+    if (title !== undefined) conversation.title = title.substring(0, 200);
+    if (status && ['active', 'archived'].includes(status)) conversation.status = status;
+    if (tags && Array.isArray(tags)) conversation.tags = tags.slice(0, 10);
+    
+    await conversation.save();
+    
+    res.json({
+      success: true,
+      conversation: {
+        id: conversation._id,
+        conversationId: conversation.conversationId,
+        title: conversation.title,
+        status: conversation.status,
+        tags: conversation.tags,
+        updatedAt: conversation.updatedAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Update error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update conversation'
+    });
+  }
+});
+
+// ============================================
+// DELETE CONVERSATION
+// ============================================
+
+/**
+ * DELETE /api/user/conversations/:conversationId
+ * Soft delete (archive) or hard delete conversation
+ */
+router.delete('/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { permanent = false } = req.query;
+    
+    const conversation = await Conversation.findOne({
+      conversationId,
+      userId: req.user._id
+    });
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+    
+    if (permanent === 'true') {
+      // Hard delete - remove conversation and all messages
+      await Message.deleteMany({ conversationId });
+      await conversation.deleteOne();
+      
+      res.json({
+        success: true,
+        message: 'Conversation permanently deleted'
+      });
+    } else {
+      // Soft delete - mark as deleted
+      conversation.status = 'deleted';
+      await conversation.save();
+      
+      res.json({
+        success: true,
+        message: 'Conversation deleted'
+      });
+    }
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Delete error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete conversation'
+    });
+  }
+});
+
+// ============================================
+// ADD MESSAGE
+// ============================================
+
+/**
+ * POST /api/user/conversations/:conversationId/messages
+ * Add a message to conversation (usually done by the query handler)
+ */
+router.post('/:conversationId/messages', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { role, content, metadata, structuredResponse } = req.body;
+    
+    if (!role || !content) {
+      return res.status(400).json({
+        success: false,
+        error: 'Role and content are required'
+      });
+    }
+    
+    // Ensure conversation exists
+    let conversation = await Conversation.findOne({
+      conversationId,
+      userId: req.user._id
+    });
+    
+    if (!conversation) {
+      // Auto-create conversation
+      conversation = await saveConversation(
+        req.user._id,
+        conversationId,
+        content.substring(0, 100)
+      );
+    }
+    
+    // Create message
+    const message = await saveMessage(
+      conversationId,
+      req.user._id,
+      role,
+      content,
+      metadata
+    );
+    
+    // If it's an assistant message with structured response, save it
+    if (structuredResponse && role === 'assistant') {
+      message.structuredResponse = structuredResponse;
+      await message.save();
+    }
+    
+    res.status(201).json({
+      success: true,
+      message: {
+        id: message._id,
+        role: message.role,
+        content: message.content.substring(0, 500) + (message.content.length > 500 ? '...' : ''),
+        createdAt: message.createdAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Add message error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add message'
+    });
+  }
+});
+
+// ============================================
+// UPDATE CONVERSATION RAW DATA
+// ============================================
+
+/**
+ * PUT /api/user/conversations/:conversationId/data
+ * Update conversation raw data (clinical trials, FDA, etc.)
+ */
+router.put('/:conversationId/data', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { rawData, queryType } = req.body;
+    
+    let conversation = await Conversation.findOne({
+      conversationId,
+      userId: req.user._id
+    });
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+    
+    // Update raw data
+    if (rawData) {
+      if (rawData.clinicalTrials) {
+        conversation.rawData.clinicalTrials = rawData.clinicalTrials;
+        conversation.cachedData.clinicalTrialsCount = rawData.clinicalTrials.length;
+      }
+      if (rawData.fda) {
+        conversation.rawData.fda = rawData.fda;
+        conversation.cachedData.fdaResultsCount = rawData.fda.length;
+      }
+      if (rawData.orangeBook) {
+        conversation.rawData.orangeBook = rawData.orangeBook;
+        conversation.cachedData.orangeBookCount = rawData.orangeBook.length;
+      }
+      if (rawData.pubmed) {
+        conversation.rawData.pubmed = rawData.pubmed;
+        conversation.cachedData.pubmedCount = rawData.pubmed.length;
+      }
+    }
+    
+    // Track query types
+    if (queryType && !conversation.queryTypes.includes(queryType)) {
+      conversation.queryTypes.push(queryType);
+    }
+    
+    await conversation.save();
+    
+    res.json({
+      success: true,
+      cachedData: conversation.cachedData
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Update data error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update conversation data'
+    });
+  }
+});
+
+// ============================================
+// GET CONVERSATION RAW DATA
+// ============================================
+
+/**
+ * GET /api/user/conversations/:conversationId/data
+ * Get conversation raw data for context
+ */
+router.get('/:conversationId/data', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    const conversation = await Conversation.findOne({
+      conversationId,
+      userId: req.user._id
+    }).select('rawData cachedData queryTypes');
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      rawData: conversation.rawData,
+      cachedData: conversation.cachedData,
+      queryTypes: conversation.queryTypes
+    });
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Get data error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get conversation data'
+    });
+  }
+});
+
+// ============================================
+// EXPORTS
+// ============================================
+
+module.exports = router;

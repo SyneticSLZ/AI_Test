@@ -1,0 +1,250 @@
+/**
+ * ================================================================================
+ * LEAF INTELLIGENCE - AUTHENTICATION MIDDLEWARE
+ * ================================================================================
+ * 
+ * Middleware functions for protecting routes and tracking user activity
+ * 
+ * @version 1.0.0
+ */
+
+const { Session, User, logActivity, updateUserUsage } = require('./aidb');
+
+/**
+ * Get auth token from request
+ */
+function getTokenFromRequest(req) {
+  // Check cookie first
+  if (req.cookies?.auth_token) {
+    return req.cookies.auth_token;
+  }
+  
+  // Check Authorization header
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  
+  // Check query parameter (for WebSocket or special cases)
+  if (req.query?.token) {
+    return req.query.token;
+  }
+  
+  return null;
+}
+
+/**
+ * Get client IP address
+ */
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+         req.headers['x-real-ip'] ||
+         req.connection?.remoteAddress ||
+         req.socket?.remoteAddress ||
+         'unknown';
+}
+
+/**
+ * Validate session and get user
+ */
+async function validateSession(token) {
+  if (!token) return null;
+  
+  try {
+    const session = await Session.findOne({
+      token,
+      isActive: true,
+      expiresAt: { $gt: new Date() }
+    });
+    
+    if (!session) return null;
+    
+    const user = await User.findById(session.userId);
+    if (!user || user.status !== 'active') {
+      return null;
+    }
+    
+    return { user, session };
+  } catch (error) {
+    console.error('[AUTH MIDDLEWARE] Validation error:', error);
+    return null;
+  }
+}
+
+/**
+ * Require authentication middleware
+ * Blocks unauthenticated requests with 401
+ */
+async function requireAuth(req, res, next) {
+  const token = getTokenFromRequest(req);
+  const result = await validateSession(token);
+  
+  if (!result) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required',
+      code: 'AUTH_REQUIRED'
+    });
+  }
+  
+  req.user = result.user;
+  req.userSession = result.session;
+  next();
+}
+
+/**
+ * Optional authentication middleware
+ * Attaches user if authenticated, but allows anonymous requests
+ */
+async function optionalAuth(req, res, next) {
+  const token = getTokenFromRequest(req);
+  
+  if (token) {
+    const result = await validateSession(token);
+    if (result) {
+      req.user = result.user;
+      req.userSession = result.session;
+    }
+  }
+  
+  next();
+}
+
+/**
+ * Require specific role(s)
+ */
+function requireRole(...roles) {
+  return async (req, res, next) => {
+    // First check authentication
+    const token = getTokenFromRequest(req);
+    const result = await validateSession(token);
+    
+    if (!result) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+    
+    req.user = result.user;
+    req.userSession = result.session;
+    
+    // Check role
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions',
+        code: 'FORBIDDEN'
+      });
+    }
+    
+    next();
+  };
+}
+
+/**
+ * Track query activity middleware
+ * Use after requireAuth for query endpoints
+ */
+function trackQuery(queryType) {
+  return async (req, res, next) => {
+    if (req.user) {
+      const startTime = Date.now();
+      
+      // Track when response finishes
+      res.on('finish', async () => {
+        const duration = Date.now() - startTime;
+        
+        try {
+          // Update user usage stats
+          await updateUserUsage(req.user._id);
+          
+          // Log the query activity
+          await logActivity(req.user._id, 'query', {
+            queryType,
+            query: req.body?.query?.substring(0, 200) || '',
+            conversationId: req.body?.conversationId
+          }, {
+            ipAddress: getClientIp(req),
+            userAgent: req.headers['user-agent'],
+            queryType,
+            duration,
+            success: res.statusCode < 400
+          });
+        } catch (error) {
+          console.error('[AUTH MIDDLEWARE] Activity tracking error:', error);
+        }
+      });
+    }
+    
+    next();
+  };
+}
+
+/**
+ * Rate limiting by user
+ * Simple in-memory rate limiter (use Redis for production)
+ */
+const rateLimitStore = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 60; // requests per window
+
+function rateLimit(maxRequests = RATE_LIMIT_MAX) {
+  return (req, res, next) => {
+    const userId = req.user?._id?.toString() || getClientIp(req);
+    const now = Date.now();
+    
+    let userLimit = rateLimitStore.get(userId);
+    
+    if (!userLimit || now - userLimit.windowStart > RATE_LIMIT_WINDOW) {
+      userLimit = { count: 0, windowStart: now };
+    }
+    
+    userLimit.count++;
+    rateLimitStore.set(userId, userLimit);
+    
+    // Set rate limit headers
+    res.set('X-RateLimit-Limit', maxRequests);
+    res.set('X-RateLimit-Remaining', Math.max(0, maxRequests - userLimit.count));
+    res.set('X-RateLimit-Reset', new Date(userLimit.windowStart + RATE_LIMIT_WINDOW).toISOString());
+    
+    if (userLimit.count > maxRequests) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many requests. Please slow down.',
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfter: Math.ceil((userLimit.windowStart + RATE_LIMIT_WINDOW - now) / 1000)
+      });
+    }
+    
+    next();
+  };
+}
+
+/**
+ * Clean up rate limit store periodically
+ */
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of rateLimitStore.entries()) {
+    if (now - value.windowStart > RATE_LIMIT_WINDOW * 2) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, RATE_LIMIT_WINDOW);
+
+// ============================================
+// EXPORTS
+// ============================================
+
+module.exports = {
+  requireAuth,
+  optionalAuth,
+  requireRole,
+  trackQuery,
+  rateLimit,
+  validateSession,
+  getTokenFromRequest,
+  getClientIp
+};

@@ -1,0 +1,711 @@
+/**
+ * ================================================================================
+ * LEAF INTELLIGENCE - DATABASE CONNECTION & MODELS
+ * ================================================================================
+ * 
+ * MongoDB Atlas connection with all LEAF_AI prefixed collections
+ * 
+ * Collections:
+ * - LEAF_AI_users: User accounts
+ * - LEAF_AI_sessions: Active sessions
+ * - LEAF_AI_activity_logs: User activity tracking
+ * - LEAF_AI_conversations: Saved conversations
+ * - LEAF_AI_messages: Individual messages within conversations
+ * 
+ * @version 1.0.0
+ */
+
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+// ============================================
+// DATABASE CONNECTION
+// ============================================
+
+let isConnected = false;
+
+async function connectDB() {
+  if (isConnected) {
+    console.log('[DB] Already connected to MongoDB');
+    return;
+  }
+
+  const mongoUri = process.env.MONGODB_URI;
+  
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI environment variable is not set');
+  }
+
+  try {
+    await mongoose.connect(mongoUri, {
+      // Modern Mongoose options
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    
+    isConnected = true;
+    console.log('[DB] ✓ Connected to MongoDB Atlas');
+    
+    // Create indexes
+    await createIndexes();
+    
+  } catch (error) {
+    console.error('[DB] ✗ MongoDB connection error:', error.message);
+    throw error;
+  }
+}
+
+async function createIndexes() {
+  try {
+    // User indexes
+    await User.collection.createIndex({ email: 1 }, { unique: true });
+    
+    // Session indexes
+    await Session.collection.createIndex({ token: 1 }, { unique: true });
+    await Session.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await Session.collection.createIndex({ userId: 1 });
+    
+    // Activity log indexes
+    await ActivityLog.collection.createIndex({ userId: 1, createdAt: -1 });
+    await ActivityLog.collection.createIndex({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 }); // 90 days
+    
+    // Conversation indexes
+    await Conversation.collection.createIndex({ userId: 1, updatedAt: -1 });
+    await Conversation.collection.createIndex({ conversationId: 1 }, { unique: true });
+    
+    // Message indexes
+    await Message.collection.createIndex({ conversationId: 1, createdAt: 1 });
+    
+    console.log('[DB] ✓ Indexes created');
+  } catch (error) {
+    console.error('[DB] Index creation error:', error.message);
+  }
+}
+
+// ============================================
+// USER SCHEMA
+// ============================================
+
+const userSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+  },
+  password: {
+    type: String,
+    required: true,
+    minlength: 8
+  },
+  firstName: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 50
+  },
+  lastName: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 50
+  },
+   files: [{
+    title: { type: String, required: true },
+    filename: { type: String, required: true },
+    originalName: { type: String, required: true },
+    gcsPath: { type: String, required: true },
+    bucket: { type: String, default: 'leaf-app-uploads' },
+    size: { type: Number, required: true },
+    mimeType: { type: String, required: true },
+    fileType: { type: String }, // 'pdf', 'docx', 'image', 'video'
+    extractedText: { type: String },
+    viewUrl: { type: String },
+    metadata: {
+      pageCount: Number,
+      wordCount: Number,
+      duration: Number,
+      ocr: {
+        method: String,
+        confidence: Number,
+        chunksProcessed: Number
+      }
+    },
+    uploadedAt: { type: Date, default: Date.now },
+    conversationId: { type: String }
+  }],
+  company: {
+    type: String,
+    trim: true,
+    maxlength: 100,
+    default: ''
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'enterprise'],
+    default: 'user'
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'suspended', 'pending_verification'],
+    default: 'active'
+  },
+  profile: {
+    avatar: { type: String, default: '' },
+    timezone: { type: String, default: 'UTC' },
+    preferences: {
+      theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
+      emailNotifications: { type: Boolean, default: true },
+      defaultSearchScope: { type: String, default: 'all' }
+    }
+  },
+  usage: {
+    totalQueries: { type: Number, default: 0 },
+    totalConversations: { type: Number, default: 0 },
+    lastQueryAt: { type: Date },
+    monthlyQueries: { type: Number, default: 0 },
+    monthlyResetAt: { type: Date, default: Date.now }
+  },
+  security: {
+    passwordChangedAt: { type: Date },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockUntil: { type: Date },
+    lastLoginAt: { type: Date },
+    lastLoginIp: { type: String },
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorSecret: { type: String }
+  },
+  resetPassword: {
+    token: { type: String },
+    expiresAt: { type: Date }
+  },
+  emailVerification: {
+    verified: { type: Boolean, default: false },
+    token: { type: String },
+    expiresAt: { type: Date }
+  }
+}, {
+  timestamps: true,
+  collection: 'LEAF_AI_users'
+});
+
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    this.security.passwordChangedAt = new Date();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Check if account is locked
+userSchema.methods.isLocked = function() {
+  return !!(this.security.lockUntil && this.security.lockUntil > Date.now());
+};
+
+// Get full name
+userSchema.methods.getFullName = function() {
+  return `${this.firstName} ${this.lastName}`;
+};
+
+// Increment failed login attempts
+userSchema.methods.incrementFailedLogins = async function() {
+  const MAX_FAILED_ATTEMPTS = 5;
+  const LOCK_DURATION = 15 * 60 * 1000; // 15 minutes
+  
+  this.security.failedLoginAttempts += 1;
+  
+  if (this.security.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
+    this.security.lockUntil = new Date(Date.now() + LOCK_DURATION);
+  }
+  
+  await this.save();
+};
+
+// Reset failed login attempts
+userSchema.methods.resetFailedLogins = async function() {
+  this.security.failedLoginAttempts = 0;
+  this.security.lockUntil = undefined;
+  await this.save();
+};
+
+// Safe user object (no sensitive data)
+userSchema.methods.toSafeObject = function() {
+  return {
+    id: this._id,
+    email: this.email,
+    firstName: this.firstName,
+    lastName: this.lastName,
+    fullName: this.getFullName(),
+    company: this.company,
+    role: this.role,
+    status: this.status,
+    profile: this.profile,
+    usage: this.usage,
+    createdAt: this.createdAt,
+    lastLoginAt: this.security.lastLoginAt
+  };
+};
+
+// ============================================
+// SESSION SCHEMA
+// ============================================
+
+const sessionSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  token: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  userAgent: {
+    type: String,
+    default: ''
+  },
+  ipAddress: {
+    type: String,
+    default: ''
+  },
+  deviceInfo: {
+    browser: { type: String },
+    os: { type: String },
+    device: { type: String }
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  expiresAt: {
+    type: Date,
+    required: true
+  },
+  rememberMe: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true,
+  collection: 'LEAF_AI_sessions'
+});
+
+// ============================================
+// ACTIVITY LOG SCHEMA
+// ============================================
+
+const activityLogSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  action: {
+    type: String,
+    required: true,
+    enum: [
+      'login',
+      'logout',
+      'signup',
+      'password_change',
+      'password_reset_request',
+      'password_reset_complete',
+      'profile_update',
+      'query',
+      'conversation_start',
+      'conversation_continue',
+      'export_document',
+      'view_trial',
+      'view_fda_result',
+      'search_pubmed',
+      'failed_login',
+      'session_expired',
+      'account_locked',
+      'account_unlocked'
+    ]
+  },
+  details: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  metadata: {
+    ipAddress: { type: String },
+    userAgent: { type: String },
+    conversationId: { type: String },
+    queryType: { type: String },
+    searchTerms: { type: String },
+    resultCount: { type: Number },
+    duration: { type: Number }, // in milliseconds
+    success: { type: Boolean, default: true },
+    errorMessage: { type: String }
+  }
+}, {
+  timestamps: true,
+  collection: 'LEAF_AI_activity_logs'
+});
+
+// ============================================
+// CONVERSATION SCHEMA
+// ============================================
+
+const conversationSchema = new mongoose.Schema({
+  conversationId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  title: {
+    type: String,
+    default: 'New Conversation',
+    maxlength: 200
+  },
+  summary: {
+    type: String,
+    default: '',
+    maxlength: 500
+  },
+  status: {
+    type: String,
+    enum: ['active', 'archived', 'deleted'],
+    default: 'active'
+  },
+  tags: [{
+    type: String,
+    maxlength: 50
+  }],
+  queryTypes: [{
+    type: String,
+    enum: ['clinical_trials', 'fda', 'orange_book', 'pubmed', 'stats', 'research']
+  }],
+  messageCount: {
+    type: Number,
+    default: 0
+  },
+  lastMessageAt: {
+    type: Date
+  },
+  // Cached raw data references (for quick access)
+  cachedData: {
+    clinicalTrialsCount: { type: Number, default: 0 },
+    fdaResultsCount: { type: Number, default: 0 },
+    orangeBookCount: { type: Number, default: 0 },
+    pubmedCount: { type: Number, default: 0 }
+  },
+  // Store the raw data for conversation context
+  rawData: {
+    clinicalTrials: { type: mongoose.Schema.Types.Mixed },
+    fda: { type: mongoose.Schema.Types.Mixed },
+    orangeBook: { type: mongoose.Schema.Types.Mixed },
+    pubmed: { type: mongoose.Schema.Types.Mixed }
+  }
+}, {
+  timestamps: true,
+  collection: 'LEAF_AI_conversations'
+});
+
+// ============================================
+// MESSAGE SCHEMA
+// ============================================
+
+const messageSchema = new mongoose.Schema({
+  conversationId: {
+    type: String,
+    required: true
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  role: {
+    type: String,
+    enum: ['user', 'assistant', 'system'],
+    required: true
+  },
+  content: {
+    type: String,
+    required: true
+  },
+  messageType: {
+    type: String,
+    enum: ['query', 'response', 'error', 'info'],
+    default: 'query'
+  },
+  metadata: {
+    queryType: { type: String },
+    toolsUsed: [{ type: String }],
+    resultCount: { type: Number },
+    processingTime: { type: Number },
+    citations: [{ type: mongoose.Schema.Types.Mixed }],
+    charts: [{ type: mongoose.Schema.Types.Mixed }]
+  },
+  // For assistant responses with structured data
+  structuredResponse: {
+    markdown: { type: String },
+    citations: { type: mongoose.Schema.Types.Mixed },
+    chartData: { type: mongoose.Schema.Types.Mixed },
+    tabularData: { type: mongoose.Schema.Types.Mixed }
+  }
+}, {
+  timestamps: true,
+  collection: 'LEAF_AI_messages'
+});
+
+// ============================================
+// CREATE MODELS
+// ============================================
+
+const User = mongoose.model('User', userSchema);
+const Session = mongoose.model('Session', sessionSchema);
+const ActivityLog = mongoose.model('ActivityLog', activityLogSchema);
+const Conversation = mongoose.model('Conversation', conversationSchema);
+const Message = mongoose.model('Message', messageSchema);
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Log user activity
+ */
+async function logActivity(userId, action, details = {}, metadata = {}) {
+  try {
+    await ActivityLog.create({
+      userId,
+      action,
+      details,
+      metadata
+    });
+  } catch (error) {
+    console.error('[DB] Failed to log activity:', error.message);
+  }
+}
+
+/**
+ * Get user by email
+ */
+async function findUserByEmail(email) {
+  return User.findOne({ email: email.toLowerCase() });
+}
+
+/**
+ * Get user by ID
+ */
+async function findUserById(userId) {
+  return User.findById(userId);
+}
+
+/**
+ * Create new user
+ */
+async function createUser(userData) {
+  const user = new User(userData);
+  await user.save();
+  return user;
+}
+
+/**
+ * Update user usage stats
+ */
+async function updateUserUsage(userId) {
+  const now = new Date();
+  const user = await User.findById(userId);
+  
+  if (!user) return;
+  
+  // Reset monthly queries if new month
+  const lastReset = user.usage.monthlyResetAt;
+  if (lastReset.getMonth() !== now.getMonth() || lastReset.getFullYear() !== now.getFullYear()) {
+    user.usage.monthlyQueries = 0;
+    user.usage.monthlyResetAt = now;
+  }
+  
+  user.usage.totalQueries += 1;
+  user.usage.monthlyQueries += 1;
+  user.usage.lastQueryAt = now;
+  
+  await user.save();
+}
+
+/**
+ * Save conversation to database
+ */
+async function saveConversation(userId, conversationId, title, rawData = {}) {
+  let conversation = await Conversation.findOne({ conversationId });
+  
+  if (!conversation) {
+    conversation = new Conversation({
+      conversationId,
+      userId,
+      title,
+      rawData,
+      cachedData: {
+        clinicalTrialsCount: rawData.clinicalTrials?.length || 0,
+        fdaResultsCount: rawData.fda?.length || 0,
+        orangeBookCount: rawData.orangeBook?.length || 0,
+        pubmedCount: rawData.pubmed?.length || 0
+      }
+    });
+    
+    // Update user stats
+    await User.findByIdAndUpdate(userId, {
+      $inc: { 'usage.totalConversations': 1 }
+    });
+  } else {
+    // Update existing conversation
+    if (rawData.clinicalTrials) conversation.rawData.clinicalTrials = rawData.clinicalTrials;
+    if (rawData.fda) conversation.rawData.fda = rawData.fda;
+    if (rawData.orangeBook) conversation.rawData.orangeBook = rawData.orangeBook;
+    if (rawData.pubmed) conversation.rawData.pubmed = rawData.pubmed;
+    
+    conversation.cachedData = {
+      clinicalTrialsCount: conversation.rawData.clinicalTrials?.length || 0,
+      fdaResultsCount: conversation.rawData.fda?.length || 0,
+      orangeBookCount: conversation.rawData.orangeBook?.length || 0,
+      pubmedCount: conversation.rawData.pubmed?.length || 0
+    };
+  }
+  
+  conversation.lastMessageAt = new Date();
+  await conversation.save();
+  
+  return conversation;
+}
+
+/**
+ * Save message to database
+ */
+async function saveMessage(conversationId, userId, role, content, metadata = {}) {
+  const message = new Message({
+    conversationId,
+    userId,
+    role,
+    content: content.substring(0, 50000), // Limit content size
+    messageType: role === 'user' ? 'query' : 'response',
+    metadata
+  });
+  
+  await message.save();
+  
+  // Update conversation message count
+  await Conversation.findOneAndUpdate(
+    { conversationId },
+    { 
+      $inc: { messageCount: 1 },
+      lastMessageAt: new Date()
+    }
+  );
+  
+  return message;
+}
+
+/**
+ * Get user conversations
+ */
+async function getUserConversations(userId, options = {}) {
+  const {
+    limit = 20,
+    skip = 0,
+    status = 'active',
+    sortBy = 'updatedAt',
+    sortOrder = -1
+  } = options;
+  
+  const query = { userId, status };
+  
+  const conversations = await Conversation.find(query)
+    .sort({ [sortBy]: sortOrder })
+    .skip(skip)
+    .limit(limit)
+    .select('-rawData') // Exclude raw data for list view
+    .lean();
+  
+  const total = await Conversation.countDocuments(query);
+  
+  return { conversations, total };
+}
+
+/**
+ * Get conversation with messages
+ */
+async function getConversationWithMessages(conversationId, userId) {
+  const conversation = await Conversation.findOne({ 
+    conversationId, 
+    userId 
+  }).lean();
+  
+  if (!conversation) return null;
+  
+  const messages = await Message.find({ conversationId })
+    .sort({ createdAt: 1 })
+    .lean();
+  
+  return { ...conversation, messages };
+}
+
+/**
+ * Get user activity history
+ */
+async function getUserActivity(userId, options = {}) {
+  const { limit = 50, skip = 0, actions } = options;
+  
+  const query = { userId };
+  if (actions && actions.length) {
+    query.action = { $in: actions };
+  }
+  
+  return ActivityLog.find(query)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+}
+
+// ============================================
+// EXPORTS
+// ============================================
+
+module.exports = {
+  // Connection
+  connectDB,
+  mongoose,
+  
+  // Models
+  User,
+  Session,
+  ActivityLog,
+  Conversation,
+  Message,
+  
+  // Helper functions
+  logActivity,
+  findUserByEmail,
+  findUserById,
+  createUser,
+  updateUserUsage,
+  saveConversation,
+  saveMessage,
+  getUserConversations,
+  getConversationWithMessages,
+  getUserActivity
+};

@@ -1,0 +1,2924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Physician Intelligence | SyneticX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['DM Sans', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+    
+    body {
+      background: linear-gradient(145deg, #f8f7fc 0%, #f3f1f9 30%, #eef6f9 60%, #f9f5f8 100%);
+      min-height: 100vh;
+    }
+    
+    /* Subtle gradient mesh */
+    .gradient-mesh {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background: 
+        radial-gradient(ellipse 80% 50% at 20% 40%, rgba(232, 218, 239, 0.5) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 60% at 80% 30%, rgba(214, 228, 240, 0.4) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 50% at 50% 80%, rgba(220, 235, 240, 0.4) 0%, transparent 50%);
+    }
+    
+    /* Glass effect - subtle */
+    .glass {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    
+    .glass-solid {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    
+    /* Floating sidebar */
+    .floating-sidebar {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 
+        0 4px 24px -4px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(255, 255, 255, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+    
+    /* 3D Orb - refined */
+    .orb {
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      position: relative;
+      background: 
+        radial-gradient(ellipse 35% 25% at 30% 28%, rgba(255, 255, 255, 0.95) 0%, transparent 50%),
+        radial-gradient(ellipse 20% 12% at 65% 70%, rgba(255, 255, 255, 0.3) 0%, transparent 40%),
+        linear-gradient(155deg, 
+          #f9a8c9 0%, 
+          #e8b4d9 25%,
+          #c9b8e8 50%,
+          #a8c4e8 75%,
+          #7dd3d8 100%);
+      box-shadow: 
+        0 30px 60px -15px rgba(200, 150, 180, 0.35),
+        0 15px 30px -10px rgba(150, 160, 200, 0.25),
+        inset 0 -15px 30px rgba(120, 200, 210, 0.15);
+      animation: orbFloat 8s ease-in-out infinite;
+    }
+    
+    .orb-reflection {
+      width: 140px;
+      height: 40px;
+      margin: 15px auto 0;
+      background: radial-gradient(ellipse, rgba(200, 150, 180, 0.25) 0%, transparent 70%);
+      filter: blur(10px);
+    }
+    
+    @keyframes orbFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+    
+    /* Gradient text */
+    .gradient-text {
+      background: linear-gradient(135deg, #d4a0b8 0%, #a8b0d4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    /* Mode pills - sharp */
+    .mode-pill {
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+    
+    .mode-pill.active {
+      background: linear-gradient(135deg, #e8a0c0 0%, #b0a8d8 50%, #88c8d0 100%);
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 4px 12px -2px rgba(180, 140, 180, 0.35);
+    }
+    
+    .mode-pill:not(.active) {
+      background: rgba(255, 255, 255, 0.8);
+      border-color: rgba(0, 0, 0, 0.06);
+    }
+    
+    .mode-pill:not(.active):hover {
+      background: rgba(255, 255, 255, 1);
+      border-color: rgba(180, 140, 180, 0.3);
+    }
+    
+    /* Search input */
+    .search-box {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.08);
+      transition: all 0.2s ease;
+    }
+    
+    .search-box:focus-within {
+      border-color: rgba(180, 140, 180, 0.4);
+      box-shadow: 0 8px 32px -8px rgba(180, 140, 180, 0.15);
+    }
+    
+    /* Buttons */
+    .btn-primary {
+      background: linear-gradient(135deg, #e8a0c0 0%, #b0a8d8 100%);
+      color: white;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-primary:hover {
+      box-shadow: 0 4px 16px -4px rgba(180, 140, 180, 0.4);
+      transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      transition: all 0.2s ease;
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 1);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.02); }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.2); }
+    
+    /* Toast */
+    .toast {
+      animation: toastSlide 0.3s ease;
+    }
+    @keyframes toastSlide {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .badge-success { background: #e8f5e9; color: #2e7d32; }
+    .badge-warning { background: #fff8e1; color: #f57c00; }
+    .badge-danger { background: #ffebee; color: #c62828; }
+    .badge-info { background: #f3e8ff; color: #7c3aed; }
+    
+    /* Table */
+    .data-table {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    
+    .data-table thead {
+      background: rgba(0, 0, 0, 0.02);
+    }
+    
+    .data-table tbody tr {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      transition: background 0.15s ease;
+    }
+    
+    .data-table tbody tr:hover {
+      background: rgba(180, 140, 180, 0.04);
+    }
+    
+    .row-selected {
+      background: rgba(180, 140, 180, 0.08) !important;
+      border-left: 3px solid #b0a8d8;
+    }
+    
+    /* Progress bar */
+    .progress-bar {
+      height: 6px;
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 3px;
+      overflow: visible;
+      position: relative;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #e8a0c0 0%, #b0a8d8 100%);
+    }
+    .progress-bar .marker {
+      position: absolute;
+      top: -3px;
+      height: 12px;
+      width: 2px;
+      background: #f59e0b;
+    }
+    
+    /* Dropdown */
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 6px;
+      min-width: 180px;
+      background: white;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
+      box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.12);
+      z-index: 100;
+      overflow: hidden;
+    }
+    .dropdown-menu.show { display: block; }
+    
+    /* Profile panel */
+    .profile-panel {
+      transition: transform 0.3s ease, opacity 0.25s ease;
+    }
+    .profile-panel.hidden {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    /* Filter chip */
+    .filter-chip {
+      background: rgba(180, 140, 180, 0.1);
+      border: 1px solid rgba(180, 140, 180, 0.2);
+      color: #6b5b7a;
+    }
+    
+    /* Input */
+    input, select {
+      transition: all 0.15s ease;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: rgba(180, 140, 180, 0.5);
+      box-shadow: 0 0 0 3px rgba(180, 140, 180, 0.1);
+    }
+    
+    /* Tooltip */
+    .has-tooltip { position: relative; cursor: help; }
+    .has-tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) scale(0.96);
+      background: #1a1a1a;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 400;
+      z-index: 1000;
+      max-width: 240px;
+      white-space: normal;
+      line-height: 1.4;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.15s ease;
+    }
+    .has-tooltip:hover::after {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) scale(1);
+    }
+    
+    /* Shimmer */
+    .shimmer {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    /* Map */
+    #mapContainer { 
+      height: 320px; 
+      border-radius: 8px; 
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    
+    /* Icon button - Updated for floating sidebar */
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      color: #9ca3af;
+      background: transparent;
+    }
+    .icon-btn:hover {
+      background: rgba(236, 232, 245, 0.6);
+      color: #7c3aed;
+    }
+    .icon-btn.active {
+      background: rgba(236, 232, 245, 0.8);
+      color: #7c3aed;
+    }
+    
+    /* Stat card */
+    .stat-card {
+      background: linear-gradient(135deg, rgba(232, 160, 192, 0.1) 0%, rgba(176, 168, 216, 0.1) 100%);
+      border: 1px solid rgba(180, 140, 180, 0.15);
+    }
+
+    /* Sticky table header */
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Ensure proper table layout for split tables */
+.data-table table {
+  table-layout: fixed;
+}
+
+.data-table th:nth-child(1),
+.data-table td:nth-child(1) { width: 22%; }
+.data-table th:nth-child(2),
+.data-table td:nth-child(2) { width: 18%; }
+.data-table th:nth-child(3),
+.data-table td:nth-child(3) { width: 15%; }
+.data-table th:nth-child(4),
+.data-table td:nth-child(4) { width: 12%; }
+.data-table th:nth-child(5),
+.data-table td:nth-child(5) { width: 12%; }
+.data-table th:nth-child(6),
+.data-table td:nth-child(6) { width: 10%; }
+.data-table th:nth-child(7),
+.data-table td:nth-child(7) { width: 11%; }
+
+/* Slide panel */
+.slide-panel {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+.slide-panel.hidden {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+/* AI Report markdown styles */
+.prose { color: #374151; }
+.prose h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 1rem 0; color: #111827; }
+.prose h2 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.75rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
+.prose h3 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem 0; color: #374151; }
+.prose p { margin: 0.75rem 0; line-height: 1.6; }
+.prose ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
+.prose li { margin: 0.25rem 0; }
+.prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+.prose th { background: #f9fafb; padding: 0.5rem; text-align: left; font-weight: 600; border: 1px solid #e5e7eb; }
+.prose td { padding: 0.5rem; border: 1px solid #e5e7eb; }
+.prose strong { font-weight: 600; color: #111827; }
+.prose hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
+.prose code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875rem; font-family: monospace; }
+
+/* AI Code cards */
+.code-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.75rem; transition: all 0.15s; }
+.code-card:hover { border-color: #c4b5fd; box-shadow: 0 2px 8px rgba(139,92,246,0.1); }
+.code-badge { font-family: monospace; font-weight: 600; background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #6d28d9; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.875rem; display: inline-block; }
+.confidence-high { color: #059669; }
+.confidence-medium { color: #d97706; }
+.confidence-low { color: #dc2626; }
+
+/* AI Loading */
+.ai-step { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; opacity: 0.4; transition: opacity 0.3s; }
+.ai-step.active { opacity: 1; }
+.ai-step.done { opacity: 0.6; }
+.ai-step .icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f3f4f6; }
+.ai-step.active .icon { background: linear-gradient(135deg, #e8a0c0, #b0a8d8); animation: pulse 1.5s infinite; }
+.ai-step.done .icon { background: #10b981; color: white; }
+  /* Interactive Filters */
+.filter-panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.state-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #4b5563;
+}
+.state-chip:hover {
+  border-color: #a78bfa;
+  background: #f5f3ff;
+}
+.state-chip.active {
+  background: linear-gradient(135deg, #8b5cf6, #a855f7);
+  color: white;
+  border-color: transparent;
+}
+.state-chip .remove {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+.state-chip .remove:hover {
+  opacity: 1;
+}
+
+.filter-section {
+  margin-bottom: 12px;
+}
+.filter-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.quick-filter-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #6b7280;
+}
+.quick-filter-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+.quick-filter-btn.active {
+  background: #ede9fe;
+  border-color: #a78bfa;
+  color: #7c3aed;
+}
+
+.range-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  outline: none;
+}
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b5cf6, #a855f7);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Trial Search Styles */
+.trial-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.trial-card:hover {
+  border-color: #a78bfa;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+}
+.trial-card.selected {
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.trial-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.trial-status-recruiting {
+  background: #dcfce7;
+  color: #166534;
+}
+.trial-status-not-yet {
+  background: #fef9c3;
+  color: #854d0e;
+}
+.trial-status-active {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.trial-status-completed {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.trial-phase-badge {
+  background: #ede9fe;
+  color: #6d28d9;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.intervention-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.intervention-tag.drug {
+  background: #fce7f3;
+  color: #9d174d;
+}
+.intervention-tag.procedure {
+  background: #cffafe;
+  color: #0e7490;
+}
+.intervention-tag.biological {
+  background: #d1fae5;
+  color: #047857;
+}
+.intervention-tag.device {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.trial-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  appearance: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.trial-checkbox:checked {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  border-color: #8b5cf6;
+}
+.trial-checkbox:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.trial-selection-bar {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  padding: 16px 24px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+}
+
+.skeleton-trial {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 12px;
+}
+  
+  </style>
+</head>
+<body class="min-h-screen text-zinc-800">
+  
+  <div class="gradient-mesh"></div>
+  
+  <!-- Floating Icon Sidebar -->
+  <aside id="iconSidebar" class="fixed left-4 top-1/2 -translate-y-1/2 z-50 floating-sidebar rounded-2xl py-4 px-2 flex flex-col items-center" style="height: auto;">
+    <!-- Logo at top -->
+    <div class="mb-4 pb-3 border-b border-black/5 w-full flex justify-center">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 via-purple-50 to-purple-100 flex items-center justify-center shadow-sm">
+        <svg class="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+      </div>
+    </div>
+    
+    <!-- Center icons -->
+    <div class="flex-1 flex flex-col items-center gap-1.5">
+      <button onclick="goToSearch()" class="icon-btn active" title="Search">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      </button>
+      <button id="toggleSidebarBtn" onclick="toggleSidebar()" class="icon-btn hidden" title="Filters">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+      </button>
+      <button onclick="toggleMapView()" id="mapSidebarBtn" class="icon-btn hidden" title="Map View">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+      </button>
+      <button class="icon-btn" title="Settings">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+      </button>
+    </div>
+    
+    <!-- Logout at bottom -->
+    <div class="mt-3 pt-3 border-t border-black/5 w-full flex justify-center">
+      <button class="icon-btn" title="Logout">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+      </button>
+    </div>
+  </aside>
+  
+<div class="relative z-10 h-screen flex flex-col pl-20 overflow-hidden">
+    
+    <!-- Compare Bar -->
+    <div id="comparisonBar" class="hidden glass border-b border-purple-200/30 px-5 py-2.5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-medium text-purple-700">Compare Mode</span>
+          <span id="compareCount" class="badge badge-info">0 selected</span>
+          <div id="comparePreview" class="flex gap-1.5"></div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="viewComparison()" class="px-3 py-1 btn-primary rounded-lg text-sm font-medium">View Comparison</button>
+          <button onclick="clearComparison()" class="px-3 py-1 btn-secondary rounded-lg text-sm">Clear</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main -->
+<main class="flex-1 flex overflow-hidden">
+      
+      <!-- Content -->
+<div class="flex-1 flex overflow-hidden h-full">
+        
+
+        
+        <!-- Main Area -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+          
+          <!-- Search View -->
+          <div id="searchView" class="min-h-full flex flex-col items-center justify-center p-8">
+            <div class="max-w-xl w-full text-center">
+                    <div class="w-32 h-32 mx-auto mb-6 rounded-lg flex items-center justify-center">
+            <div class="relative">
+                <img src="leaf.png" alt="Leaf Intelligence" class="h-32 w-32 object-contain">
+                <div class="absolute inset-0 bg-gradient-to-r from-emerald-400 to-cyan-400 opacity-20 blur-xl rounded-full"></div>
+            </div>
+        </div>
+
+                <!-- Title & Description - LARGER -->
+      <h2 class="text-3xl font-semibold text-gray-900 mb-2">Ask  <span class="text-3xl font-bold bg-gradient-to-r from-emerald-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                Leaf AI
+                            </span></h2>
+        <p class="text-sm text-gray-600 mb-6 max-w-2xl mx-auto leading-relaxed">AI Powers Easy Physician Discovery Find high-volume physicians from Medicare claims data.</p>
+                    
+              
+                            <div class="search-box rounded-xl p-1.5 mb-4">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1">
+                   <div id="input-indication" class="input-container">
+  <input type="text" id="indicationInput" 
+    placeholder="Describe any condition... (e.g., IgA nephropathy, lupus kidney disease)" 
+    class="w-full px-4 py-3 bg-transparent text-zinc-800 border-0 focus:outline-none text-sm">
+</div>
+                    <div id="input-code" class="input-container hidden">
+                      <input type="text" id="codeInput" placeholder="Enter HCPCS/CPT code (e.g., 50200, J9312)" class="w-full px-4 py-3 bg-transparent text-zinc-800 border-0 focus:outline-none text-sm">
+                    </div>
+                    <div id="input-drug" class="input-container hidden">
+                      <input type="text" id="drugInput" placeholder="Enter drug name (e.g., rituximab, tacrolimus)" class="w-full px-4 py-3 bg-transparent text-zinc-800 border-0 focus:outline-none text-sm">
+                    </div>
+                    <div id="input-trial" class="input-container hidden">
+  <input type="text" id="trialInput" 
+    placeholder="Search clinical trials by condition (e.g., IgA nephropathy, lupus nephritis)" 
+    class="w-full px-4 py-3 bg-transparent text-zinc-800 border-0 focus:outline-none text-sm">
+</div>
+                  </div>
+                   <button onclick="performSearch()" class="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all hover:shadow-md flex items-center justify-center group" title="Send message">
+                <svg class="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+                </svg>
+            </button>
+                </div>
+              </div>
+
+<div class="flex justify-center gap-2 mt-8 mb-5">
+    <button onclick="switchMode('indication')" id="mode-indication" class="px-4 py-1 text-sm bg-gradient-to-r from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 text-violet-800 rounded-lg transition-all hover:shadow-sm border border-violet-200 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+        </svg>
+        Indication
+    </button>
+
+    <button onclick="switchMode('code')" id="mode-code" class="px-4 py-1 text-sm bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-800 rounded-lg transition-all hover:shadow-sm border border-amber-200 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        HCPCS Code
+    </button>
+
+    <button onclick="switchMode('drug')" id="mode-drug" class="px-4 py-1 text-sm bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-emerald-800 rounded-lg transition-all hover:shadow-sm border border-emerald-200 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        Part D Drug
+    </button>
+
+    <button onclick="switchMode('trial')" id="mode-trial" class="px-4 py-1 text-sm bg-gradient-to-r from-cyan-50 to-blue-50 hover:from-cyan-100 hover:to-blue-100 text-cyan-800 rounded-lg transition-all hover:shadow-sm border border-cyan-200 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+        </svg>
+        Clinical Trial
+    </button>
+</div>
+              
+
+              
+              <button onclick="toggleSearchFilters()" class="text-sm text-zinc-400 hover:text-zinc-600 flex items-center gap-1.5 mx-auto mb-4">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                <span id="filterToggleText">Filters</span>
+              </button>
+              
+              <div id="searchFilters" class="hidden glass rounded-xl p-5 text-left mb-4">
+                <div class="grid grid-cols-3 gap-4">
+                  <div>
+                    <label class="block text-xs text-zinc-500 mb-1">State</label>
+                    <select id="searchStateFilter" class="w-full px-3 py-2 bg-white border border-black/8 rounded-lg text-sm">
+                      <option value="">All States</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-zinc-500 mb-1">Specialty</label>
+                    <select id="searchSpecialtyFilter" class="w-full px-3 py-2 bg-white border border-black/8 rounded-lg text-sm">
+                      <option value="">All Specialties</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-zinc-500 mb-1">Min. Beneficiaries</label>
+                    <input type="number" id="searchMinBeneFilter" value="50" min="11" class="w-full px-3 py-2 bg-white border border-black/8 rounded-lg text-sm">
+                  </div>
+                </div>
+                <div id="modeSpecificFilters" class="mt-4 pt-4 border-t border-black/5"></div>
+              </div>
+              
+            <div class="text-xs text-zinc-400">
+  Quick: 
+  <button onclick="quickSearch('indication', 'IgA nephropathy')" class="text-purple-500 hover:underline">IgA Nephropathy</button>
+  <span class="mx-1.5">•</span>
+  <button onclick="quickSearch('indication', 'lupus nephritis')" class="text-purple-500 hover:underline">Lupus Nephritis</button>
+  <span class="mx-1.5">•</span>
+  <button onclick="quickSearch('code', '50200')" class="text-purple-500 hover:underline">Code 50200</button>
+  <span class="mx-1.5">•</span>
+  <button onclick="quickSearch('drug', 'tacrolimus')" class="text-purple-500 hover:underline">Tacrolimus</button>
+  <span class="mx-1.5">•</span>
+<button onclick="quickSearch('trial', 'IgA nephropathy')" class="text-purple-500 hover:underline">IgAN Trials</button>
+
+</div>
+            </div>
+          </div>
+          
+<!-- Trial Selection View -->
+<div id="trialsView" class="hidden flex flex-col h-full">
+  
+  <!-- Trial Results Card -->
+  <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden m-6 max-h-full">
+    
+    <!-- Header -->
+    <div class="flex-shrink-0 px-6 py-4 border-b border-gray-100">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button onclick="goToSearch()" class="p-1.5 -ml-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+          </button>
+          <div>
+            <h1 class="text-lg font-semibold text-gray-900" id="trialsTitle">Clinical Trials</h1>
+            <p class="text-sm text-gray-500" id="trialsSubtitle">Select trials to find matching physicians</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <select id="trialStatusFilter" onchange="filterTrials()" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm">
+            <option value="active">Active Trials</option>
+            <option value="recruiting">Recruiting Only</option>
+            <option value="all">All Trials</option>
+          </select>
+          <span class="text-2xl font-semibold text-gray-900" id="trialsCountBig">0</span>
+          <span class="text-sm text-gray-500">trials</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Trial List -->
+    <div class="flex-1 overflow-auto p-6" id="trialsListContainer">
+      <div id="trialsList" class="space-y-4">
+        <!-- Trials will be rendered here -->
+      </div>
+    </div>
+    
+    <!-- Selection Bar -->
+    <div id="trialSelectionBar" class="trial-selection-bar hidden">
+      <div class="flex items-center justify-between max-w-4xl mx-auto">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-medium text-gray-700"><span id="selectedTrialCount">0</span> trial(s) selected</span>
+          <div id="selectedTrialPreviews" class="flex gap-2"></div>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="clearTrialSelection()" class="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium">
+            Clear
+          </button>
+          <button onclick="findPhysiciansForTrials()" class="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Find Matching Physicians
+          </button>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+<!-- Results View -->
+<div id="resultsView" class="hidden flex flex-col h-full p-6">
+  
+  <!-- Card Container -->
+  <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-h-full">
+    
+
+  <!-- Top Navbar -->
+  <header class="flex-shrink-0 bg-white border-b border-gray-200">
+    <div class="px-6 h-14 flex items-center justify-between">
+      <!-- Left: Logo + Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm">
+          <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
+        </div>
+        <div class="hidden sm:block">
+          <span class="font-semibold text-gray-900">Physician Intelligence</span>
+          <span class="text-gray-400 mx-2">·</span>
+          <span class="text-sm text-gray-500">Clinical Trial Recruitment</span>
+        </div>
+      </div>
+      
+      <!-- Right: Actions -->
+      <div class="flex items-center gap-2">
+        <button onclick="toggleMapView()" id="mapToggleBtn" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Map View">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+        </button>
+        <button onclick="toggleExportMenu()" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Export">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        </button>
+        <div class="w-px h-6 bg-gray-200 mx-1"></div>
+        <button class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Settings">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+  
+  <!-- Content Area -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    
+    <!-- Page Header -->
+    <div class="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-100">
+      <div class="flex items-center justify-between">
+        <!-- Left: Back + Title -->
+        <div class="flex items-center gap-4">
+          <button onclick="goToSearch()" class="p-1.5 -ml-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" title="New Search">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+          </button>
+          <div>
+            <h1 class="text-lg font-semibold text-gray-900" id="resultsTitle">Code: 50200</h1>
+            <p class="text-sm text-gray-500" id="resultsSubtitle">Renal biopsy, percutaneous, by trocar or needle</p>
+            <!-- AI Results Tabs -->
+<div id="aiResultsTabs" class="hidden flex gap-1 mt-3">
+  <button onclick="switchResultsTab('physicians')" id="tab-physicians" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-100 text-purple-700">Physicians</button>
+  <button onclick="switchResultsTab('report')" id="tab-report" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:bg-gray-100">AI Report</button>
+  <button onclick="switchResultsTab('codes')" id="tab-codes" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:bg-gray-100">Codes</button>
+</div>
+          </div>
+        </div>
+        
+        <!-- Right: Count -->
+        <div class="text-right">
+          <span class="text-2xl font-semibold text-gray-900" id="resultsCountBig">21</span>
+          <span class="text-sm text-gray-500 ml-1">physicians</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Toolbar -->
+    <div class="flex-shrink-0 px-6 py-3 bg-gray-50/80 border-b border-gray-100">
+      <div class="flex items-center justify-between">
+        <!-- Left: Controls -->
+        <div class="flex items-center gap-2">
+          <select id="sortSelect" onchange="changeSortOrder()" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 cursor-pointer hover:border-gray-300 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
+            <option value="relevance">Relevance</option>
+            <option value="Tot_Benes">Beneficiaries ↓</option>
+            <option value="Tot_Srvcs">Services ↓</option>
+            <option value="Bene_Avg_Risk_Scre">Risk Score ↓</option>
+          </select>
+          
+          <select id="yearSelect" onchange="updateYear()" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 cursor-pointer hover:border-gray-300 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all">
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+          </select>
+          
+          <div class="w-px h-6 bg-gray-200 mx-1"></div>
+          
+          <button onclick="toggleCompareMode()" id="compareModeBtn" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+            <span id="compareModeText">Compare</span>
+          </button>
+          
+<!-- Filters Dropdown -->
+<div class="relative">
+  <button onclick="toggleFiltersDropdown()" id="filtersDropdownBtn" class="h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+    Filters
+    <span id="filterCountBadge" class="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-semibold">1</span>
+  </button>
+<div id="filtersDropdown" class="dropdown-menu w-80 p-0">
+  <!-- Header -->
+  <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+    <span class="text-sm font-semibold text-gray-700">Filters</span>
+    <button onclick="resetFilters()" class="text-xs text-purple-600 hover:text-purple-700 font-medium">Clear all</button>
+  </div>
+  
+  <!-- Active Filters -->
+  <div id="activeFiltersChips" class="px-4 py-2 border-b border-gray-100 hidden">
+    <div class="flex flex-wrap gap-1.5" id="filterChipsContainer"></div>
+  </div>
+  
+  <!-- Filter Sections -->
+  <div class="p-4 space-y-4 max-h-96 overflow-y-auto">
+    
+    <!-- Region Quick Filters -->
+    <div class="filter-section">
+      <div class="filter-section-title">Region</div>
+      <div class="flex flex-wrap gap-1.5">
+        <button onclick="selectRegion('northeast')" class="quick-filter-btn" data-region="northeast">Northeast</button>
+        <button onclick="selectRegion('southeast')" class="quick-filter-btn" data-region="southeast">Southeast</button>
+        <button onclick="selectRegion('midwest')" class="quick-filter-btn" data-region="midwest">Midwest</button>
+        <button onclick="selectRegion('southwest')" class="quick-filter-btn" data-region="southwest">Southwest</button>
+        <button onclick="selectRegion('west')" class="quick-filter-btn" data-region="west">West</button>
+      </div>
+    </div>
+    
+    <!-- State Selection -->
+    <div class="filter-section">
+      <div class="filter-section-title">State</div>
+      <select id="stateFilter" onchange="addStateFilter()" class="w-full h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm">
+        <option value="">Select state to add...</option>
+      </select>
+      <div id="selectedStates" class="flex flex-wrap gap-1.5 mt-2"></div>
+    </div>
+    
+    <!-- Specialty -->
+    <div class="filter-section">
+      <div class="filter-section-title">Specialty</div>
+      <select id="specialtyFilter" onchange="applyFilters()" class="w-full h-9 px-3 bg-white border border-gray-200 rounded-lg text-sm">
+        <option value="">All Specialties</option>
+      </select>
+    </div>
+    
+    <!-- Beneficiaries Range -->
+    <div class="filter-section">
+      <div class="filter-section-title">Min. Beneficiaries</div>
+      <div class="flex items-center gap-3">
+        <input type="range" id="minBeneSlider" min="11" max="500" value="50" class="range-slider flex-1" oninput="updateBeneSlider()">
+        <input type="number" id="minBeneFilter" value="50" min="11" class="w-16 h-8 px-2 text-center bg-white border border-gray-200 rounded-lg text-sm">
+      </div>
+    </div>
+    
+    <!-- Risk Score -->
+    <div class="filter-section">
+      <div class="filter-section-title">Risk Score Range</div>
+      <div class="flex items-center gap-2">
+        <input type="number" id="minRiskFilter" placeholder="Min" step="0.1" class="w-20 h-8 px-2 bg-white border border-gray-200 rounded-lg text-sm">
+        <span class="text-gray-400">to</span>
+        <input type="number" id="maxRiskFilter" placeholder="Max" step="0.1" class="w-20 h-8 px-2 bg-white border border-gray-200 rounded-lg text-sm">
+      </div>
+    </div>
+    
+    <!-- CKD % -->
+    <div class="filter-section">
+      <div class="filter-section-title">CKD % Range</div>
+      <div class="flex items-center gap-2">
+        <input type="number" id="minCKDFilter" placeholder="Min" class="w-20 h-8 px-2 bg-white border border-gray-200 rounded-lg text-sm">
+        <span class="text-gray-400">to</span>
+        <input type="number" id="maxCKDFilter" placeholder="Max" class="w-20 h-8 px-2 bg-white border border-gray-200 rounded-lg text-sm">
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- Footer -->
+  <div class="px-4 py-3 border-t border-gray-100 bg-gray-50 rounded-b-lg">
+    <button onclick="applyFilters(); toggleFiltersDropdown();" class="w-full h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors">
+      Apply Filters
+    </button>
+  </div>
+</div>
+</div>
+        </div>
+        
+        <!-- Right: Pagination -->
+        <div class="flex items-center gap-1">
+          <span id="resultsCount" class="text-sm text-gray-500 mr-3">21 physicians</span>
+          <button onclick="prevPage()" id="prevBtn" disabled class="h-8 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-gray-300 transition-all">← Prev</button>
+          <span id="pageInfo" class="text-sm text-gray-500 px-2 min-w-[80px] text-center">Page 1/1</span>
+          <button onclick="nextPage()" id="nextBtn" disabled class="h-8 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-gray-300 transition-all">Next →</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Map View Container -->
+    <div id="mapViewContainer" class="hidden px-6 py-4 bg-white border-b border-gray-100">
+      <div class="rounded-xl border border-gray-200 overflow-hidden">
+        <div id="mapContainer"></div>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">📍 Physician locations (state-level approximation)</p>
+    </div>
+    
+    <!-- Table -->
+    <div class="flex-1 overflow-hidden bg-white">
+      <div class="h-full overflow-auto">
+        <table class="w-full">
+          <thead class="sticky top-0 bg-gray-50 z-10">
+            <tr class="border-b border-gray-200">
+              <th id="compareHeader" class="hidden w-10 px-4 py-3"></th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Physician</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Specialty</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+              <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Benes</th>
+              <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Srvcs</th>
+              <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Risk</th>
+              <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">CKD%</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody" class="divide-y divide-gray-100"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- AI Report Panel -->
+<div id="aiReportPanel" class="hidden flex-1 overflow-auto bg-white p-6">
+  <div id="aiReportContent" class="prose max-w-none"></div>
+</div>
+
+<!-- AI Codes Panel -->
+<div id="aiCodesPanel" class="hidden flex-1 overflow-auto bg-white p-6">
+  <div id="aiCodesContent" class="grid grid-cols-3 gap-6"></div>
+</div>
+  </div>
+</div>
+</div>
+          
+          <!-- Comparison Panel -->
+          <div id="comparisonPanel" class="hidden p-5">
+            <div class="max-w-5xl mx-auto">
+              <div class="flex items-center justify-between mb-5">
+                <h2 class="text-lg font-bold text-zinc-800">Physician Comparison</h2>
+                <button onclick="closeComparison()" class="text-purple-600 hover:underline text-sm">← Back to Results</button>
+              </div>
+              <div id="comparisonContent"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Profile Panel - LARGER -->
+<!-- Profile Side Panel -->
+<aside id="sidePanel" class="slide-panel hidden fixed top-0 right-0 h-full w-[460px] p-6 z-50">
+  <div class="h-full bg-white rounded-2xl shadow-xl border border-gray-200 flex flex-col overflow-hidden">
+    
+    <!-- Header -->
+    <div class="flex-shrink-0 p-5 border-b border-gray-100">
+      <div class="flex items-start justify-between">
+        <div class="flex-1 min-w-0 pr-4">
+          <h2 class="text-lg font-semibold text-gray-900 truncate" id="profileName">Loading...</h2>
+          <p class="text-sm text-gray-500 mt-0.5" id="profileCredentials"></p>
+          <p class="text-xs text-gray-400 font-mono mt-1" id="profileNPI"></p>
+        </div>
+        <button onclick="closeProfile()" class="flex-shrink-0 p-2 -m-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      
+      <!-- Profile Tabs -->
+      <div class="flex gap-1 mt-4 p-1 bg-gray-100 rounded-xl">
+        <button onclick="switchProfileTab('overview')" id="profile-tab-overview" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg bg-white shadow-sm text-purple-700 transition-all">Overview</button>
+        <button onclick="switchProfileTab('comorbidities')" id="profile-tab-comorbidities" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Comorbidities</button>
+        <button onclick="switchProfileTab('procedures')" id="profile-tab-procedures" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Procedures</button>
+        <button onclick="switchProfileTab('prescribing')" id="profile-tab-prescribing" class="flex-1 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700 transition-all">Part D</button>
+      </div>
+    </div>
+    
+    <!-- Content -->
+    <div id="profileContent" class="flex-1 overflow-y-auto p-5"></div>
+    
+    <!-- Footer Citation -->
+    <div class="flex-shrink-0 p-4 border-t border-gray-100 bg-gray-50/50">
+      <div class="text-xs text-gray-400" id="profileCitation">Source: CMS Medicare Physician PUF 2023</div>
+      <div class="text-xs text-amber-600 mt-1 flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+        Medicare FFS only. Does not represent entire practice.
+      </div>
+    </div>
+    
+  </div>
+</aside>
+
+<!-- Backdrop for sidebar -->
+<div id="sidePanelBackdrop" class="hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onclick="closeProfile()"></div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Toast -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+
+  <script>
+    // STATE
+    let currentMode = 'indication';
+    let currentYear = '2023';
+    let currentPhysicians = [];
+    let currentPage = 1;
+    let pageSize = 50;
+    let totalResults = 0;
+    let selectedPhysician = null;
+    let nationalBenchmarks = null;
+    let currentSortBy = 'relevance';
+    let compareMode = false;
+    let compareList = [];
+    let map = null;
+    let markers = [];
+    let currentSearchParams = {};
+    let appliedFilters = {};
+    // Trial search state
+let currentTrials = [];
+let selectedTrials = [];
+let trialPageToken = null;
+let currentTrialQuery = '';
+
+    // US Bounds
+const US_BOUNDS = [[24.396308, -125.0], [49.384358, -66.93457]];
+const US_CENTER = [39.8283, -98.5795];
+
+    // INIT
+    document.addEventListener('DOMContentLoaded', async () => {
+      await Promise.all([
+
+        loadStates(),
+        loadSpecialties(),
+        loadBenchmarks()
+      ]);
+      
+      document.getElementById('codeInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+      });
+      document.getElementById('drugInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+      });
+      document.getElementById('trialInput')?.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') performSearch();
+});
+
+        document.getElementById('indicationInput')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') performSearch();
+  });
+    });
+
+    async function loadIndications() {
+      try {
+        const res = await fetch('/api/indications');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        const select = document.getElementById('indicationSelect');
+        data.indications.forEach(ind => {
+          const opt = document.createElement('option');
+          opt.value = ind.id;
+          opt.textContent = `${ind.name} (${ind.shortName})`;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        showToast('Failed to load indications', 'error');
+      }
+    }
+
+    async function loadStates() {
+      try {
+        const res = await fetch('/api/reference/states');
+        const data = await res.json();
+        ['stateFilter', 'searchStateFilter'].forEach(id => {
+          const select = document.getElementById(id);
+          if (select) data.states.forEach(state => {
+            const opt = document.createElement('option');
+            opt.value = state;
+            opt.textContent = state;
+            select.appendChild(opt);
+          });
+        });
+      } catch (err) {}
+    }
+
+    async function loadSpecialties() {
+      try {
+        const res = await fetch('/api/reference/specialties');
+        const data = await res.json();
+        ['specialtyFilter', 'searchSpecialtyFilter'].forEach(id => {
+          const select = document.getElementById(id);
+          if (select) data.specialties.forEach(spec => {
+            const opt = document.createElement('option');
+            opt.value = spec;
+            opt.textContent = spec;
+            select.appendChild(opt);
+          });
+        });
+      } catch (err) {}
+    }
+
+    async function loadBenchmarks() {
+      try {
+        const res = await fetch('/api/benchmarks');
+        const data = await res.json();
+        if (data.success) nationalBenchmarks = data.benchmarks;
+      } catch (err) {}
+    }
+
+    // MODE SWITCH
+function switchMode(mode) {
+  currentMode = mode;
+  
+  // Update mode buttons
+  document.querySelectorAll('[id^="mode-"]').forEach(btn => {
+    btn.classList.remove('active');
+    // Reset all buttons to their default styles
+    btn.classList.remove('ring-2', 'ring-purple-400', 'ring-offset-2');
+  });
+  
+  const activeBtn = document.getElementById(`mode-${mode}`);
+  if (activeBtn) {
+    activeBtn.classList.add('ring-2', 'ring-purple-400', 'ring-offset-2');
+  }
+  
+  // Show/hide input containers
+  document.querySelectorAll('.input-container').forEach(c => c.classList.add('hidden'));
+  const inputContainer = document.getElementById(`input-${mode}`);
+  if (inputContainer) {
+    inputContainer.classList.remove('hidden');
+  }
+  
+  // Update mode-specific filters
+  updateModeSpecificFilters(mode);
+}
+
+// Trial Search Functions
+async function searchTrials() {
+  const query = document.getElementById('trialInput').value.trim();
+  if (!query) {
+    showToast('Please enter a condition to search', 'warning');
+    return;
+  }
+  
+  currentTrialQuery = query;
+  selectedTrials = [];
+  trialPageToken = null;
+  
+  showTrialsLoading();
+  
+  try {
+    const statusFilter = document.getElementById('trialStatusSelect')?.value || 'active';
+    const pageSize = document.getElementById('trialPageSize')?.value || '20';
+    
+    let statusParam = '';
+    if (statusFilter === 'recruiting') {
+      statusParam = 'RECRUITING';
+    } else if (statusFilter === 'active') {
+      statusParam = 'RECRUITING,NOT_YET_RECRUITING,ENROLLING_BY_INVITATION';
+    }
+    
+    const params = new URLSearchParams({
+      q: query,
+      pageSize,
+      ...(statusParam && { status: statusParam }),
+    });
+    
+    const res = await fetch(`/api/trials/search?${params}`);
+    const data = await res.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to search trials');
+    }
+    
+    currentTrials = data.trials || [];
+    trialPageToken = data.nextPageToken;
+    
+    showTrialsView();
+    document.getElementById('trialsTitle').textContent = `Trials for "${query}"`;
+    document.getElementById('trialsSubtitle').textContent = `${data.totalCount?.toLocaleString() || currentTrials.length} trials found • Select trials to find matching physicians`;
+    document.getElementById('trialsCountBig').textContent = data.totalCount?.toLocaleString() || currentTrials.length;
+    
+    renderTrialsList();
+    
+  } catch (err) {
+    console.error('Trial search error:', err);
+    showToast(`Trial search failed: ${err.message}`, 'error');
+    showSearchView();
+  }
+}
+
+function showTrialsLoading() {
+  showTrialsView();
+  document.getElementById('trialsList').innerHTML = `
+    <div class="space-y-4">
+      ${Array(5).fill(0).map(() => `
+        <div class="skeleton-trial h-40"></div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function showTrialsView() {
+  document.getElementById('searchView').classList.add('hidden');
+  document.getElementById('resultsView').classList.add('hidden');
+  document.getElementById('trialsView').classList.remove('hidden');
+  document.getElementById('comparisonPanel')?.classList.add('hidden');
+}
+
+function renderTrialsList() {
+  const container = document.getElementById('trialsList');
+  
+  if (!currentTrials || currentTrials.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-16">
+        <div class="text-4xl mb-4">🔬</div>
+        <p class="text-gray-500">No trials found for "${currentTrialQuery}"</p>
+        <p class="text-gray-400 text-sm mt-2">Try a different condition or broaden your search</p>
+      </div>
+    `;
+    return;
+  }
+  
+  container.innerHTML = currentTrials.map((trial, index) => {
+    const isSelected = selectedTrials.some(t => t.nctId === trial.nctId);
+    return renderTrialCard(trial, index, isSelected);
+  }).join('');
+  
+  // Add load more button if there's more data
+  if (trialPageToken) {
+    container.innerHTML += `
+      <button onclick="loadMoreTrials()" class="w-full py-3 text-purple-600 hover:text-purple-700 font-medium text-sm hover:bg-purple-50 rounded-lg transition-colors">
+        Load More Trials
+      </button>
+    `;
+  }
+  
+  updateTrialSelectionBar();
+}
+
+function renderTrialCard(trial, index, isSelected) {
+  const statusClass = getTrialStatusClass(trial.overallStatus);
+  
+  return `
+    <div class="trial-card ${isSelected ? 'selected' : ''}" onclick="toggleTrialSelection('${trial.nctId}', ${index})">
+      <div class="flex gap-4">
+        
+        <!-- Checkbox -->
+        <div class="flex-shrink-0 pt-1">
+          <input type="checkbox" class="trial-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleTrialSelection('${trial.nctId}', ${index})">
+        </div>
+        
+        <!-- Content -->
+        <div class="flex-1 min-w-0">
+          
+          <!-- Header -->
+          <div class="flex items-start justify-between gap-4 mb-2">
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-gray-900 line-clamp-2">${trial.briefTitle}</h3>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="font-mono text-xs text-gray-400">${trial.nctId}</span>
+                <span class="text-gray-300">•</span>
+                <span class="text-xs text-gray-500">${trial.leadSponsor || 'Unknown sponsor'}</span>
+              </div>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <span class="trial-status-badge ${statusClass}">${trial.statusDisplay || trial.overallStatus}</span>
+              ${trial.phaseDisplay && trial.phaseDisplay !== 'N/A' ? `<span class="trial-phase-badge">${trial.phaseDisplay}</span>` : ''}
+            </div>
+          </div>
+          
+          <!-- Conditions -->
+          <div class="mb-3">
+            <span class="text-xs text-gray-500">Conditions:</span>
+            <span class="text-sm text-gray-700 ml-1">${(trial.conditions || []).slice(0, 3).join(', ') || 'Not specified'}</span>
+          </div>
+          
+          <!-- Interventions -->
+          <div class="flex flex-wrap gap-2 mb-3">
+            ${(trial.drugs || []).slice(0, 3).map(d => `
+              <span class="intervention-tag drug">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762z"></path></svg>
+                ${d.name}
+              </span>
+            `).join('')}
+            ${(trial.procedures || []).slice(0, 2).map(p => `
+              <span class="intervention-tag procedure">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7z" clip-rule="evenodd"></path></svg>
+                ${p.name}
+              </span>
+            `).join('')}
+            ${(trial.drugs?.length || 0) + (trial.procedures?.length || 0) > 5 ? `
+              <span class="text-xs text-gray-400">+${(trial.drugs?.length || 0) + (trial.procedures?.length || 0) - 5} more</span>
+            ` : ''}
+            ${!trial.drugs?.length && !trial.procedures?.length ? `
+              <span class="text-xs text-gray-400 italic">No specific interventions listed</span>
+            ` : ''}
+          </div>
+          
+          <!-- Footer Stats -->
+          <div class="flex items-center gap-4 text-xs text-gray-500">
+            ${trial.enrollment ? `
+              <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path></svg>
+                ${trial.enrollment.toLocaleString()} enrolled
+              </span>
+            ` : ''}
+            ${trial.usLocationsCount ? `
+              <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
+                ${trial.usLocationsCount} US sites
+              </span>
+            ` : ''}
+            ${trial.startDate ? `
+              <span>Started: ${trial.startDate}</span>
+            ` : ''}
+          </div>
+          
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function getTrialStatusClass(status) {
+  switch (status) {
+    case 'RECRUITING': return 'trial-status-recruiting';
+    case 'NOT_YET_RECRUITING': return 'trial-status-not-yet';
+    case 'ACTIVE_NOT_RECRUITING': return 'trial-status-active';
+    case 'COMPLETED': return 'trial-status-completed';
+    default: return '';
+  }
+}
+
+function toggleTrialSelection(nctId, index) {
+  const trial = currentTrials[index];
+  const existingIndex = selectedTrials.findIndex(t => t.nctId === nctId);
+  
+  if (existingIndex >= 0) {
+    selectedTrials.splice(existingIndex, 1);
+  } else {
+    if (selectedTrials.length >= 5) {
+      showToast('Maximum 5 trials can be selected', 'warning');
+      return;
+    }
+    selectedTrials.push(trial);
+  }
+  
+  renderTrialsList();
+  updateTrialSelectionBar();
+}
+
+function updateTrialSelectionBar() {
+  const bar = document.getElementById('trialSelectionBar');
+  const count = document.getElementById('selectedTrialCount');
+  const previews = document.getElementById('selectedTrialPreviews');
+  
+  if (selectedTrials.length > 0) {
+    bar.classList.remove('hidden');
+    count.textContent = selectedTrials.length;
+    previews.innerHTML = selectedTrials.slice(0, 3).map(t => `
+      <span class="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+        ${t.nctId}
+        <button onclick="event.stopPropagation(); removeTrialFromSelection('${t.nctId}')" class="hover:text-purple-900">×</button>
+      </span>
+    `).join('');
+    if (selectedTrials.length > 3) {
+      previews.innerHTML += `<span class="text-xs text-gray-500">+${selectedTrials.length - 3} more</span>`;
+    }
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function removeTrialFromSelection(nctId) {
+  selectedTrials = selectedTrials.filter(t => t.nctId !== nctId);
+  renderTrialsList();
+  updateTrialSelectionBar();
+}
+
+function clearTrialSelection() {
+  selectedTrials = [];
+  renderTrialsList();
+  updateTrialSelectionBar();
+}
+
+async function loadMoreTrials() {
+  if (!trialPageToken) return;
+  
+  try {
+    const statusFilter = document.getElementById('trialStatusFilter')?.value || 'active';
+    const pageSize = document.getElementById('trialPageSize')?.value || '20';
+    
+    let statusParam = '';
+    if (statusFilter === 'recruiting') {
+      statusParam = 'RECRUITING';
+    } else if (statusFilter === 'active') {
+      statusParam = 'RECRUITING,NOT_YET_RECRUITING,ENROLLING_BY_INVITATION';
+    }
+    
+    const params = new URLSearchParams({
+      q: currentTrialQuery,
+      pageSize,
+      pageToken: trialPageToken,
+      ...(statusParam && { status: statusParam }),
+    });
+    
+    const res = await fetch(`/api/trials/search?${params}`);
+    const data = await res.json();
+    
+    if (data.success) {
+      currentTrials = [...currentTrials, ...(data.trials || [])];
+      trialPageToken = data.nextPageToken;
+      renderTrialsList();
+    }
+  } catch (err) {
+    showToast('Failed to load more trials', 'error');
+  }
+}
+
+function filterTrials() {
+  // Re-search with new filters
+  if (currentTrialQuery) {
+    searchTrials();
+  }
+}
+
+async function findPhysiciansForTrials() {
+  if (selectedTrials.length === 0) {
+    showToast('Please select at least one trial', 'warning');
+    return;
+  }
+  
+  // Reset physician state
+  currentPage = 1;
+  currentPhysicians = [];
+  window.currentAIResult = null;
+  
+  showAILoading();
+  
+  try {
+    const params = buildFilterParams();
+    
+    let endpoint, body;
+    
+    if (selectedTrials.length === 1) {
+      endpoint = '/api/trials/find-physicians';
+      body = {
+        nctId: selectedTrials[0].nctId,
+        filters: {
+          state: params.state || null,
+          specialty: params.specialty || null,
+          minBeneficiaries: params.minBeneficiaries || 50,
+        },
+        year: currentYear,
+      };
+    } else {
+      endpoint = '/api/trials/find-physicians-multi';
+      body = {
+        nctIds: selectedTrials.map(t => t.nctId),
+        filters: {
+          state: params.state || null,
+          specialty: params.specialty || null,
+          minBeneficiaries: params.minBeneficiaries || 50,
+        },
+        year: currentYear,
+      };
+    }
+    
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    
+    const data = await res.json();
+    
+    stopAILoading();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to find physicians');
+    }
+    
+    // ============================================
+    // ADD THIS: Switch from trials view to results view
+    // ============================================
+    document.getElementById('trialsView')?.classList.add('hidden');
+    document.getElementById('searchView')?.classList.add('hidden');
+    document.getElementById('resultsView')?.classList.remove('hidden');
+    document.getElementById('toggleSidebarBtn')?.classList.remove('hidden');
+    document.getElementById('mapSidebarBtn')?.classList.remove('hidden');
+    // ============================================
+    
+    // Store result for AI tabs
+    window.currentAIResult = {
+      codeMapping: data.codeMapping,
+      physicians: data.physicians,
+    };
+    
+    currentPhysicians = data.physicians || [];
+    totalResults = data.totalPhysicians || currentPhysicians.length;
+    currentSearchParams = { type: 'trial', trials: selectedTrials, ...params };
+    
+    // Build header
+    const trialLabel = selectedTrials.length === 1 
+      ? selectedTrials[0].nctId 
+      : `${selectedTrials.length} Trials`;
+    
+    document.getElementById('resultsTitle').textContent = `Physicians for ${trialLabel}`;
+    
+    const interventionCount = (data.codeMapping?.codes?.cpt?.length || 0) + 
+                             (data.codeMapping?.codes?.hcpcs?.length || 0);
+    
+    document.getElementById('resultsSubtitle').innerHTML = `
+      <span class="inline-flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        <span class="text-cyan-600 font-medium">Trial-Matched</span>
+      </span>
+      <span class="mx-2 text-gray-300">•</span>
+      ${totalResults.toLocaleString()} physicians
+      <span class="mx-2 text-gray-300">•</span>
+      <span class="text-gray-400">${interventionCount} procedure/drug codes matched</span>
+    `;
+    
+    // Show AI tabs
+    document.getElementById('aiResultsTabs').classList.remove('hidden');
+    switchResultsTab('physicians');
+    
+    updateAppliedFilters(params, { trial: trialLabel });
+    renderPhysicians();
+    updatePagination();
+    
+  } catch (err) {
+    stopAILoading();
+    console.error('Trial physician search error:', err);
+    showToast(`Search failed: ${err.message}`, 'error');
+    showTrialsView();
+  }
+}
+    function updateModeSpecificFilters(mode) {
+      const container = document.getElementById('modeSpecificFilters');
+      if (mode === 'indication') {
+        container.innerHTML = `<p class="text-xs text-zinc-500">Uses pre-mapped ICD-10, CPT, and HCPCS codes.</p>`;
+      } else if (mode === 'code') {
+        container.innerHTML = `
+          <div>
+            <label class="block text-xs text-zinc-500 mb-1">Multiple Codes (comma-separated)</label>
+            <input type="text" id="multiCodeInput" placeholder="50200,50205,J9312" class="w-full px-3 py-2 bg-white border border-black/8 rounded-lg text-sm">
+          </div>
+          <div class="mt-2 text-xs text-zinc-400">
+            Quick: <button onclick="setCodeAndSearch('50200')" class="text-purple-500 hover:underline">50200</button> •
+            <button onclick="setCodeAndSearch('90935')" class="text-purple-500 hover:underline">90935</button> •
+            <button onclick="setCodeAndSearch('J9312')" class="text-purple-500 hover:underline">J9312</button>
+          </div>`;
+      } else if (mode === 'drug') {
+        container.innerHTML = `
+          <div class="p-3 bg-amber-50 rounded-lg text-xs text-amber-700">
+            ⚠️ Part D covers outpatient pharmacy only. Infusion drugs (Part B) not included.
+          </div>
+          <div class="mt-2 text-xs text-zinc-400">
+            Quick: <button onclick="setDrugAndSearch('cyclosporine')" class="text-purple-500 hover:underline">Cyclosporine</button> •
+            <button onclick="setDrugAndSearch('tacrolimus')" class="text-purple-500 hover:underline">Tacrolimus</button>
+          </div>`;
+       } else if (mode === 'trial') {
+    container.innerHTML = `
+      <div class="p-3 bg-cyan-50 rounded-lg text-xs text-cyan-700 flex items-start gap-2">
+        <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+        </svg>
+        <span>Search ClinicalTrials.gov. Select trials to find physicians who perform the same procedures or prescribe the same drugs used in the trial protocol.</span>
+      </div>
+      <div class="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Trial Status</label>
+          <select id="trialStatusSelect" class="w-full px-3 py-2 bg-white border border-black/8 rounded-lg text-sm">
+            <option value="active">Active (Recruiting + Not Yet)</option>
+            <option value="recruiting">Recruiting Only</option>
+            <option value="all">All Statuses</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Results per page</label>
+          <select id="trialPageSize" class="w-full px-3 py-2 bg-white border border-black/8 rounded-lg text-sm">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+      </div>`;
+  }
+}
+    // SEARCH
+async function performSearch() {
+  if (currentMode === 'indication') await searchByIndication();
+  else if (currentMode === 'code') {
+    const multi = document.getElementById('multiCodeInput')?.value?.trim();
+    if (multi) await searchByMultipleCodes(multi);
+    else await searchByCode();
+  } else if (currentMode === 'drug') await searchByDrug();
+  else if (currentMode === 'trial') await searchTrials();
+}
+
+
+
+function quickSearch(mode, value) {
+  switchMode(mode);
+  if (mode === 'indication') document.getElementById('indicationInput').value = value;
+  else if (mode === 'code') document.getElementById('codeInput').value = value;
+  else if (mode === 'drug') document.getElementById('drugInput').value = value;
+  else if (mode === 'trial') document.getElementById('trialInput').value = value;
+  performSearch();
+}
+
+
+    function setCodeAndSearch(code) { document.getElementById('codeInput').value = code; performSearch(); }
+    function setDrugAndSearch(drug) { document.getElementById('drugInput').value = drug; performSearch(); }
+
+async function searchByIndication() {
+  const query = document.getElementById('indicationInput').value.trim();
+  if (!query) { 
+    showToast('Please describe a condition', 'warning'); 
+    return; 
+  }
+  
+  // Reset and show loading
+  currentPage = 1;
+  currentPhysicians = [];
+  window.currentAIResult = null;
+  
+  showAILoading();
+  
+  try {
+    const params = buildFilterParams();
+    
+    const res = await fetch('/api/ai/search-physicians', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        query, 
+        state: params.state || null,
+        specialty: params.specialty || null,
+        minBeneficiaries: params.minBeneficiaries || 50,
+        year: currentYear 
+      })
+    });
+    
+    const data = await res.json();
+    
+    // Stop loading animation
+    stopAILoading();
+    
+    if (!data.success) throw new Error(data.error || 'AI search failed');
+    
+    window.currentAIResult = data;
+    currentPhysicians = data.physicians || [];
+    totalResults = data.totalCount || currentPhysicians.length;
+    currentSearchParams = { type: 'ai', query, ...params };
+    
+    // Update header
+    const conditionName = data.aiMapping?.condition?.name || query;
+    document.getElementById('resultsTitle').textContent = conditionName;
+    document.getElementById('resultsSubtitle').innerHTML = `
+      <span class="inline-flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+        <span class="text-purple-600 font-medium">AI-Mapped</span>
+      </span>
+      <span class="mx-2 text-gray-300">•</span>
+      ${totalResults.toLocaleString()} physicians
+      <span class="mx-2 text-gray-300">•</span>
+      <span class="text-gray-400">${data.aiMapping?.codes?.icd10?.length || 0} ICD-10, ${data.aiMapping?.codes?.cpt?.length || 0} CPT codes</span>
+    `;
+    
+    document.getElementById('aiResultsTabs').classList.remove('hidden');
+    switchResultsTab('physicians');
+    
+    updateAppliedFilters(params, { indication: conditionName });
+    renderPhysicians();
+    updatePagination();
+    
+  } catch (err) {
+    stopAILoading();
+    console.error('AI search error:', err);
+    showToast(`AI search failed: ${err.message}`, 'error');
+    showSearchView();
+  }
+}
+
+// ADD these new functions:
+
+let aiLoadingInterval = null;
+
+function showAILoading() {
+  // Clear any previous interval
+  if (aiLoadingInterval) {
+    clearInterval(aiLoadingInterval);
+    aiLoadingInterval = null;
+  }
+  
+  // Reset state
+  window.currentAIResult = null;
+  
+  showResults();
+  
+  // Hide AI tabs and reset header during loading
+  document.getElementById('aiResultsTabs')?.classList.add('hidden');
+  document.getElementById('aiReportPanel')?.classList.add('hidden');
+  document.getElementById('aiCodesPanel')?.classList.add('hidden');
+  
+  // Reset header to loading state
+  document.getElementById('resultsTitle').innerHTML = `
+    <span class="loading-pulse">Analyzing condition...</span>
+  `;
+  document.getElementById('resultsSubtitle').innerHTML = `
+    <span class="skeleton inline-block w-48 h-4"></span>
+  `;
+  document.getElementById('resultsCountBig').textContent = '—';
+  document.getElementById('resultsCount').textContent = 'Searching...';
+  
+  // Loading skeleton in table
+  document.getElementById('resultsBody').innerHTML = `
+    <tr><td colspan="8" class="px-6 py-12">
+      <div class="max-w-md mx-auto">
+        <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 border border-purple-100">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-800">AI Code Mapping</h3>
+              <p class="text-sm text-gray-500">Processing your query...</p>
+            </div>
+          </div>
+          
+          <div class="space-y-3">
+            <div class="ai-step active" id="step1">
+              <div class="icon"><div class="spinner"></div></div>
+              <div class="flex-1">
+                <span class="text-sm font-medium text-gray-700">Identifying condition</span>
+              </div>
+            </div>
+            <div class="ai-step" id="step2">
+              <div class="icon"><svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633z" clip-rule="evenodd"/></svg></div>
+              <div class="flex-1">
+                <span class="text-sm font-medium text-gray-700">Mapping billing codes</span>
+              </div>
+            </div>
+            <div class="ai-step" id="step3">
+              <div class="icon"><svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg></div>
+              <div class="flex-1">
+                <span class="text-sm font-medium text-gray-700">Searching physicians</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-6">
+            <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div id="aiProgressBar" class="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500" style="width: 10%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </td></tr>`;
+  
+  // Animate steps
+  let stepIndex = 0;
+  const steps = [
+    { step: 1, progress: 25 },
+    { step: 2, progress: 50 },
+    { step: 2, progress: 70 },
+    { step: 3, progress: 90 },
+  ];
+  
+  aiLoadingInterval = setInterval(() => {
+    if (stepIndex >= steps.length) return;
+    
+    const config = steps[stepIndex];
+    const progressBar = document.getElementById('aiProgressBar');
+    if (progressBar) progressBar.style.width = `${config.progress}%`;
+    
+    for (let i = 1; i <= 3; i++) {
+      const stepEl = document.getElementById(`step${i}`);
+      if (!stepEl) continue;
+      const iconEl = stepEl.querySelector('.icon');
+      
+      if (i < config.step) {
+        stepEl.classList.remove('active');
+        stepEl.classList.add('done');
+        if (iconEl) iconEl.innerHTML = `<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>`;
+      } else if (i === config.step) {
+        stepEl.classList.add('active');
+        stepEl.classList.remove('done');
+        if (iconEl && !iconEl.querySelector('.spinner')) iconEl.innerHTML = `<div class="spinner"></div>`;
+      }
+    }
+    stepIndex++;
+  }, 1500);
+}
+
+function stopAILoading() {
+  if (aiLoadingInterval) {
+    clearInterval(aiLoadingInterval);
+    aiLoadingInterval = null;
+  }
+}
+function switchResultsTab(tab) {
+  ['physicians', 'report', 'codes'].forEach(t => {
+    const btn = document.getElementById(`tab-${t}`);
+    if (btn) {
+      btn.classList.toggle('bg-purple-100', t === tab);
+      btn.classList.toggle('text-purple-700', t === tab);
+      btn.classList.toggle('text-gray-500', t !== tab);
+    }
+  });
+  
+  // Find table container
+  const tableWrapper = document.getElementById('resultsBody')?.closest('.overflow-auto')?.parentElement;
+  const reportPanel = document.getElementById('aiReportPanel');
+  const codesPanel = document.getElementById('aiCodesPanel');
+  
+  if (tab === 'physicians') {
+    tableWrapper?.classList.remove('hidden');
+    reportPanel?.classList.add('hidden');
+    codesPanel?.classList.add('hidden');
+  } else if (tab === 'report') {
+    tableWrapper?.classList.add('hidden');
+    reportPanel?.classList.remove('hidden');
+    codesPanel?.classList.add('hidden');
+    renderAIReport();
+  } else if (tab === 'codes') {
+    tableWrapper?.classList.add('hidden');
+    reportPanel?.classList.add('hidden');
+    codesPanel?.classList.remove('hidden');
+    renderAICodes();
+  }
+}
+
+function renderAIReport() {
+  const el = document.getElementById('aiReportContent');
+  if (!el) return;
+  
+  const report = window.currentAIResult?.codeMapping?.report;
+  if (!report) {
+    el.innerHTML = '<p class="text-gray-500">No AI report available</p>';
+    return;
+  }
+  
+  // Convert markdown to HTML
+  let html = report
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^\- (.+$)/gim, '<li>$1</li>')
+    .replace(/^(\|.+\|)$/gim, (match) => {
+      const cells = match.split('|').filter(c => c.trim());
+      if (cells.every(c => /^[-:]+$/.test(c.trim()))) return '';
+      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+    })
+    .replace(/(<tr>.*<\/tr>)+/gs, '<table>$&</table>')
+    .replace(/(<li>.*<\/li>)+/gs, '<ul>$&</ul>')
+    .replace(/---/g, '<hr>')
+    .replace(/\n\n/g, '</p><p>');
+  
+  el.innerHTML = html;
+}
+
+function renderAICodes() {
+  const el = document.getElementById('aiCodesContent');
+  if (!el) return;
+  
+  const codes = window.currentAIResult?.codeMapping?.codes;
+  if (!codes) {
+    el.innerHTML = '<p class="text-gray-500 col-span-3">No codes available</p>';
+    return;
+  }
+  
+  const renderSection = (title, list, color) => {
+    if (!list?.length) return `<div><h3 class="text-sm font-semibold text-gray-700 mb-3">${title}</h3><p class="text-xs text-gray-400">None found</p></div>`;
+    return `
+      <div>
+        <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full" style="background:${color}"></span>${title}
+        </h3>
+        <div class="space-y-2">
+          ${list.map(c => `
+            <div class="code-card">
+              <div class="flex justify-between">
+                <span class="code-badge">${c.code}</span>
+                <span class="text-xs confidence-${c.confidence||'medium'}">${c.confidence||'medium'}</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-1.5">${c.description||''}</p>
+              ${c.rationale ? `<p class="text-xs text-gray-400 mt-1 italic">${c.rationale}</p>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  };
+  
+  el.innerHTML = `
+    ${renderSection('ICD-10-CM', codes.icd10, '#8b5cf6')}
+    ${renderSection('CPT Procedures', codes.cpt, '#0ea5e9')}
+    ${renderSection('HCPCS Drugs', codes.hcpcs, '#10b981')}
+  `;
+  
+  if (codes.partDDrugs?.length) {
+    el.innerHTML += `
+      <div class="col-span-3 mt-4 pt-4 border-t">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">Part D Oral Medications</h3>
+        <div class="flex flex-wrap gap-2">
+          ${codes.partDDrugs.map(d => `<span class="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs">${d}</span>`).join('')}
+        </div>
+      </div>`;
+  }
+}
+    async function searchByCode() {
+      const code = document.getElementById('codeInput').value.trim().toUpperCase();
+      if (!code) { showToast('Please enter a code', 'warning'); return; }
+      showLoading();
+      try {
+        const params = buildFilterParams();
+        currentSearchParams = { type: 'code', code, ...params };
+        const qs = new URLSearchParams({ ...params, year: currentYear, limit: pageSize, offset: (currentPage - 1) * pageSize }).toString();
+        const res = await fetch(`/api/physicians/by-code/${code}?${qs}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Search failed');
+        currentPhysicians = data.services || data.providers || [];
+        totalResults = data.totalCount || data.count || currentPhysicians.length;
+        if (currentPhysicians.length === 0) showToast(`No providers found for code ${code}`, 'warning');
+        showResults();
+        document.getElementById('resultsTitle').textContent = `Code: ${code}`;
+        document.getElementById('resultsSubtitle').textContent = `${data.codeDescription || 'Unknown'} • ${totalResults.toLocaleString()} providers`;
+        updateAppliedFilters(params, { code });
+        renderPhysicians();
+        updatePagination();
+      } catch (err) {
+        showToast(`Search failed: ${err.message}`, 'error');
+        showSearchView();
+      }
+    }
+
+    async function searchByMultipleCodes(codes) {
+      if (!codes) codes = document.getElementById('multiCodeInput')?.value?.trim()?.toUpperCase();
+      if (!codes) { showToast('Please enter codes', 'warning'); return; }
+      showLoading();
+      try {
+        const params = buildFilterParams();
+        currentSearchParams = { type: 'multi_code', codes, ...params };
+        const qs = new URLSearchParams({ codes, ...params, year: currentYear, limit: pageSize }).toString();
+        const res = await fetch(`/api/physicians/by-codes?${qs}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Search failed');
+        currentPhysicians = data.services || data.providers || [];
+        totalResults = data.totalCount || data.count || currentPhysicians.length;
+        showResults();
+        document.getElementById('resultsTitle').textContent = `Codes: ${codes}`;
+        document.getElementById('resultsSubtitle').textContent = `${totalResults.toLocaleString()} providers`;
+        updateAppliedFilters(params, { codes });
+        renderPhysicians();
+        updatePagination();
+      } catch (err) {
+        showToast(`Search failed: ${err.message}`, 'error');
+        showSearchView();
+      }
+    }
+
+    async function searchByDrug() {
+      const drug = document.getElementById('drugInput').value.trim();
+      if (!drug) { showToast('Please enter a drug name', 'warning'); return; }
+      showLoading();
+      try {
+        const params = buildFilterParams();
+        currentSearchParams = { type: 'drug', drug, ...params };
+        const qs = new URLSearchParams({ drug, state: params.state || '', specialty: params.providerType || '', year: currentYear, limit: pageSize }).toString();
+        const res = await fetch(`/api/prescribers?${qs}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Search failed');
+        currentPhysicians = data.prescribers || [];
+        totalResults = data.count || currentPhysicians.length;
+        if (currentPhysicians.length === 0) showToast(`No prescribers found for "${drug}"`, 'warning');
+        showResults();
+        document.getElementById('resultsTitle').textContent = `Part D: ${drug}`;
+        document.getElementById('resultsSubtitle').textContent = `${totalResults.toLocaleString()} prescribers • Outpatient only`;
+        updateAppliedFilters(params, { drug });
+        renderPhysicians();
+        updatePagination();
+      } catch (err) {
+        showToast(`Search failed: ${err.message}`, 'error');
+        showSearchView();
+      }
+    }
+
+    function buildFilterParams() {
+      const params = {};
+      const stateVal = document.getElementById('searchStateFilter')?.value || document.getElementById('stateFilter')?.value;
+      const specialtyVal = document.getElementById('searchSpecialtyFilter')?.value || document.getElementById('specialtyFilter')?.value;
+      const minBeneVal = document.getElementById('searchMinBeneFilter')?.value || document.getElementById('minBeneFilter')?.value;
+      if (stateVal) params.state = stateVal;
+      if (specialtyVal) params.specialty = specialtyVal;
+      if (minBeneVal) params.minBeneficiaries = minBeneVal;
+      const city = document.getElementById('cityFilter')?.value?.trim();
+      if (city) params.city = city;
+      const zip = document.getElementById('zipFilter')?.value?.trim();
+      if (zip) params.zip = zip;
+      const minCKD = document.getElementById('minCKDFilter')?.value;
+      if (minCKD) params.minCKD = minCKD;
+      const maxCKD = document.getElementById('maxCKDFilter')?.value;
+      if (maxCKD) params.maxCKD = maxCKD;
+      const minRisk = document.getElementById('minRiskScore')?.value;
+      if (minRisk) params.minRiskScore = minRisk;
+      const maxRisk = document.getElementById('maxRiskScore')?.value;
+      if (maxRisk) params.maxRiskScore = maxRisk;
+      if (currentSortBy !== 'relevance') params.sortBy = currentSortBy;
+      appliedFilters = { ...params };
+      return params;
+    }
+
+    function toggleFiltersDropdown() {
+  document.getElementById('filtersDropdown').classList.toggle('show');
+}
+
+function updateAppliedFilters(params, searchInfo) {
+  const chips = [];
+  if (searchInfo.indication) chips.push({ label: searchInfo.indication, type: 'search' });
+  if (searchInfo.code) chips.push({ label: `Code: ${searchInfo.code}`, type: 'search' });
+  if (searchInfo.codes) chips.push({ label: `Codes: ${searchInfo.codes}`, type: 'search' });
+  if (searchInfo.drug) chips.push({ label: `Drug: ${searchInfo.drug}`, type: 'search' });
+  if (params.state) chips.push({ label: params.state, type: 'filter' });
+  if (params.specialty) chips.push({ label: params.specialty, type: 'filter' });
+  if (params.city) chips.push({ label: params.city, type: 'filter' });
+  if (params.minBeneficiaries && params.minBeneficiaries !== '50') chips.push({ label: `≥${params.minBeneficiaries} benes`, type: 'filter' });
+  
+  // const container = document.getElementById('resultsFilterChips');
+  const badge = document.getElementById('filterCountBadge');
+  
+  if (chips.length > 0) {
+    // container.innerHTML = chips.map(chip => `<span class="filter-chip px-2 py-1 rounded text-xs font-medium">${chip.label}</span>`).join('');
+    badge.textContent = chips.length;
+    badge.classList.remove('hidden');
+  } else {
+    // container.innerHTML = '<span class="text-xs text-zinc-400">No filters applied</span>';
+    badge.classList.add('hidden');
+  }
+}
+    function applyFilters() { currentPage = 1; performSearch(); }
+    function resetFilters() {
+      ['stateFilter', 'searchStateFilter', 'specialtyFilter', 'searchSpecialtyFilter', 'cityFilter', 'zipFilter', 'minCKDFilter', 'maxCKDFilter', 'minRiskScore', 'maxRiskScore'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      document.getElementById('minBeneFilter').value = '50';
+      document.getElementById('searchMinBeneFilter').value = '50';
+      if (currentPhysicians.length > 0) applyFilters();
+    }
+
+    // VIEW
+function showSearchView() {
+  document.getElementById('searchView').classList.remove('hidden');
+  document.getElementById('resultsView').classList.add('hidden');
+  document.getElementById('comparisonPanel').classList.add('hidden');
+  document.getElementById('toggleSidebarBtn').classList.add('hidden');
+  document.getElementById('mapSidebarBtn').classList.add('hidden');
+  document.getElementById('mapViewContainer').classList.add('hidden');
+  document.getElementById('aiResultsTabs')?.classList.add('hidden');
+document.getElementById('aiReportPanel')?.classList.add('hidden');
+document.getElementById('aiCodesPanel')?.classList.add('hidden');
+  closeProfile();
+}
+
+    function showResults() {
+      document.getElementById('searchView').classList.add('hidden');
+      document.getElementById('resultsView').classList.remove('hidden');
+      document.getElementById('comparisonPanel').classList.add('hidden');
+
+      document.getElementById('toggleSidebarBtn').classList.remove('hidden');
+      document.getElementById('mapSidebarBtn').classList.remove('hidden');
+      syncFilters();
+    }
+
+    function syncFilters() {
+      const stateVal = document.getElementById('searchStateFilter')?.value;
+      const specialtyVal = document.getElementById('searchSpecialtyFilter')?.value;
+      const minBeneVal = document.getElementById('searchMinBeneFilter')?.value;
+      if (stateVal) document.getElementById('stateFilter').value = stateVal;
+      if (specialtyVal) document.getElementById('specialtyFilter').value = specialtyVal;
+      if (minBeneVal) document.getElementById('minBeneFilter').value = minBeneVal;
+    }
+
+    function showLoading() {
+      showResults();
+      document.getElementById('resultsBody').innerHTML = `
+        <tr><td colspan="8" class="px-4 py-12 text-center">
+          <div class="flex items-center justify-center gap-2">
+            <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-zinc-500 text-sm">Searching...</span>
+          </div>
+        </td></tr>`;
+    }
+function goToSearch() {
+  document.getElementById('searchView').classList.remove('hidden');
+  document.getElementById('trialsView')?.classList.add('hidden');
+  document.getElementById('resultsView').classList.add('hidden');
+  document.getElementById('trialsView')?.classList.add('hidden');
+  document.getElementById('comparisonPanel')?.classList.add('hidden');
+  document.getElementById('toggleSidebarBtn')?.classList.add('hidden');
+  document.getElementById('mapSidebarBtn')?.classList.add('hidden');
+  document.getElementById('mapViewContainer')?.classList.add('hidden');
+  document.getElementById('aiResultsTabs')?.classList.add('hidden');
+  document.getElementById('aiReportPanel')?.classList.add('hidden');
+  document.getElementById('aiCodesPanel')?.classList.add('hidden');
+  closeProfile();
+  
+  // Clear trial selection when going back
+  selectedTrials = [];
+  currentTrials = [];
+}
+    function toggleSearchFilters() { document.getElementById('searchFilters').classList.toggle('hidden'); }
+
+    // RENDER
+    function renderPhysicians() {
+      const tbody = document.getElementById('resultsBody');
+      if (!currentPhysicians || currentPhysicians.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="8" class="px-4 py-16 text-center">
+            <p class="text-zinc-500">No physicians found</p>
+            <p class="text-zinc-400 text-sm mt-1">Try adjusting your filters</p>
+          </td></tr>`;
+        return;
+      }
+      document.getElementById('compareHeader').classList.toggle('hidden', !compareMode);
+      tbody.innerHTML = currentPhysicians.map(p => {
+        const npi = p.npi || p.Rndrng_NPI || p.Prscrbr_NPI || '';
+        const name = p.fullName || p.name || p.providerName || p.Rndrng_Prvdr_Last_Org_Name || p.Prscrbr_Last_Org_Name || 'Unknown';
+        const firstName = p.firstName || p.Rndrng_Prvdr_First_Name || p.Prscrbr_First_Name || '';
+        const displayName = name.includes(',') ? name : (firstName ? `${name}, ${firstName}` : name);
+        const credentials = p.credentials || p.Rndrng_Prvdr_Crdntls || p.Prscrbr_Crdntls || '';
+        const specialty = p.specialty || p.Rndrng_Prvdr_Type || p.Prscrbr_Type || '';
+        const city = p.city || p.location?.city || p.Rndrng_Prvdr_City || p.Prscrbr_City || '';
+        const state = p.state || p.location?.state || p.Rndrng_Prvdr_State_Abrvtn || p.Prscrbr_State_Abrvtn || '';
+        const benes = p.totalBeneficiaries || p.beneficiaries || p.totals?.beneficiaries || p.Tot_Benes || p.Tot_Clms || '';
+        const services = p.totalServices || p.services || p.totals?.services || p.Tot_Srvcs || '';
+        const risk = p.avgRiskScore || p.riskScore || p.Bene_Avg_Risk_Scre || '';
+        const ckd = p.chronicConditions?.ckd || p.Bene_CC_PH_CKD_V2_Pct || '';
+        const isSelected = compareList.some(c => c.npi === npi);
+        return `
+          <tr class="cursor-pointer ${isSelected ? 'row-selected' : ''}" onclick="openProfile('${npi}')">
+            ${compareMode ? `<td class="px-3 py-3" onclick="event.stopPropagation()"><input type="checkbox" class="w-4 h-4 accent-purple-600" ${isSelected ? 'checked' : ''} onchange="toggleCompare('${npi}', '${displayName.replace(/'/g, "\\'")}')"></td>` : ''}
+            <td class="px-4 py-3">
+              <div class="font-medium text-zinc-800">${displayName}</div>
+              <div class="text-xs text-zinc-400">${credentials}</div>
+            </td>
+            <td class="px-4 py-3 text-sm text-zinc-600">${specialty}</td>
+            <td class="px-4 py-3 text-sm text-zinc-600">${city}${city && state ? ', ' : ''}${state}</td>
+            <td class="px-4 py-3 text-right font-mono font-medium text-zinc-800">${formatNumber(benes)}</td>
+            <td class="px-4 py-3 text-right text-zinc-600">${formatNumber(services)}</td>
+            <td class="px-4 py-3 text-right"><span class="badge ${getRiskBadge(risk)}">${risk ? parseFloat(risk).toFixed(2) : '-'}</span></td>
+            <td class="px-4 py-3 text-right ${getCKDClass(ckd)}">${ckd ? parseFloat(ckd).toFixed(1) + '%' : '-'}</td>
+          </tr>`;
+      }).join('');
+  document.getElementById('resultsCount').textContent = `${totalResults.toLocaleString()} physicians`;
+  document.getElementById('resultsCountBig').textContent = totalResults.toLocaleString();
+      }
+
+    function formatNumber(num) { return num ? parseInt(num).toLocaleString() : '-'; }
+    function getRiskBadge(risk) { if (!risk) return 'badge-info'; const r = parseFloat(risk); return r >= 2 ? 'badge-danger' : r >= 1.5 ? 'badge-warning' : 'badge-success'; }
+    function getCKDClass(ckd) { if (!ckd) return 'text-zinc-400'; const c = parseFloat(ckd); return c >= 50 ? 'text-red-600 font-semibold' : c >= 30 ? 'text-amber-600 font-medium' : 'text-zinc-600'; }
+
+    // PROFILE
+    async function openProfile(npi) {
+  const panel = document.getElementById('sidePanel');
+  const backdrop = document.getElementById('sidePanelBackdrop');
+  panel.classList.remove('hidden');
+  backdrop.classList.remove('hidden');
+      document.getElementById('profileContent').innerHTML = `<div class="space-y-3"><div class="h-4 shimmer rounded"></div><div class="h-4 shimmer rounded w-3/4"></div><div class="h-32 shimmer rounded"></div></div>`;
+      try {
+        const res = await fetch(`/api/physicians/${npi}/compared?year=${currentYear}`);
+        const data = await res.json();
+        if (data.success) {
+          selectedPhysician = { ...data.profile, comparisons: data.comparisons };
+          renderProfileOverview();
+          document.getElementById('profileName').textContent = data.profile.fullName || `${data.profile.lastName}, ${data.profile.firstName}`;
+          document.getElementById('profileCredentials').textContent = `${data.profile.specialty || ''} · ${data.profile.credentials || ''}`;
+          document.getElementById('profileNPI').textContent = `NPI: ${npi}`;
+        } else throw new Error(data.error);
+      } catch (err) {
+        document.getElementById('profileContent').innerHTML = `<div class="p-4 bg-red-50 rounded-lg text-red-600 text-sm">${err.message}</div>`;
+      }
+    }
+
+function closeProfile() {
+  document.getElementById('sidePanel').classList.add('hidden');
+  document.getElementById('sidePanelBackdrop').classList.add('hidden');
+  selectedPhysician = null;
+}
+    function switchProfileTab(tab) {
+      document.querySelectorAll('[id^="profile-tab-"]').forEach(btn => { btn.classList.remove('bg-white', 'shadow-sm', 'text-purple-700'); btn.classList.add('text-zinc-500'); });
+      document.getElementById(`profile-tab-${tab}`).classList.add('bg-white', 'shadow-sm', 'text-purple-700');
+      document.getElementById(`profile-tab-${tab}`).classList.remove('text-zinc-500');
+      if (tab === 'overview') renderProfileOverview();
+      else if (tab === 'comorbidities') renderProfileComorbidities();
+      else if (tab === 'procedures') renderProfileProcedures();
+      else if (tab === 'prescribing') renderProfilePrescribing();
+    }
+
+    function renderProfileOverview() {
+      if (!selectedPhysician) return;
+      const p = selectedPhysician;
+      document.getElementById('profileContent').innerHTML = `
+        <div class="space-y-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="stat-card rounded-lg p-4">
+              <div class="text-xs text-zinc-500 mb-1">Beneficiaries</div>
+              <div class="text-2xl font-bold text-zinc-800">${formatNumber(p.totalBeneficiaries)}</div>
+            </div>
+            <div class="stat-card rounded-lg p-4">
+              <div class="text-xs text-zinc-500 mb-1">Services</div>
+              <div class="text-2xl font-bold text-zinc-800">${formatNumber(p.totalServices)}</div>
+            </div>
+          </div>
+          <div class="bg-white border border-black/5 rounded-lg p-4">
+            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Practice Details</h3>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div><div class="text-zinc-400 text-xs">Location</div><div class="text-zinc-700">${p.city || '-'}, ${p.state || '-'} ${p.zip || ''}</div></div>
+              <div><div class="text-zinc-400 text-xs">Specialty</div><div class="text-zinc-700">${p.specialty || '-'}</div></div>
+              <div><div class="text-zinc-400 text-xs">Entity Type</div><div class="text-zinc-700">${p.entityType || '-'}</div></div>
+              <div><div class="text-zinc-400 text-xs">Medicare</div><div class="text-zinc-700">${p.medicareParticipation ? '✓ Participating' : '✗ Non-participating'}</div></div>
+            </div>
+          </div>
+          <div class="bg-white border border-black/5 rounded-lg p-4">
+            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Patient Acuity</h3>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-zinc-600">Avg Risk Score</span>
+              <span class="badge ${getRiskBadge(p.avgRiskScore)}">${p.avgRiskScore?.toFixed(2) || '-'}</span>
+            </div>
+            ${p.comparisons?.riskScore ? `<div class="text-xs text-zinc-500 mt-2">${p.comparisons.riskScore.interpretation === 'high_acuity' ? 'High acuity' : p.comparisons.riskScore.interpretation === 'above_average' ? 'Above average' : 'Average'} (Nat'l: ${p.comparisons.riskScore.national})</div>` : ''}
+          </div>
+          <div class="bg-white border border-black/5 rounded-lg p-4">
+            <h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Medicare Payment</h3>
+            <div class="text-2xl font-bold text-zinc-800">$${formatNumber(p.totalMedicarePayment)}</div>
+            <div class="text-xs text-zinc-400 mt-1">${formatNumber(p.uniqueHCPCS)} unique HCPCS codes</div>
+          </div>
+        </div>`;
+    }
+
+    function renderProfileComorbidities() {
+      if (!selectedPhysician) return;
+      const p = selectedPhysician;
+      const cc = p.chronicConditions || {};
+      const comps = p.comparisons || {};
+      const conditions = [
+        { key: 'ckd', label: 'CKD', national: 25 },
+        { key: 'diabetes', label: 'Diabetes', national: 27 },
+        { key: 'hypertension', label: 'Hypertension', national: 60 },
+        { key: 'heartDisease', label: 'Heart Disease', national: 30 },
+        { key: 'heartFailure', label: 'Heart Failure', national: 15 },
+        { key: 'copd', label: 'COPD', national: 12 },
+        { key: 'depression', label: 'Depression', national: 18 },
+      ];
+      document.getElementById('profileContent').innerHTML = `
+        <div class="space-y-4">
+          <p class="text-sm text-zinc-500">Patient comorbidities vs national benchmarks</p>
+          ${conditions.map(c => {
+            const value = cc[c.key];
+            const comp = comps[c.key];
+            const national = comp?.national || c.national;
+            if (value === null || value === undefined) return '';
+            return `
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-zinc-600">${c.label}</span>
+                  <span class="font-medium text-zinc-800">${parseFloat(value).toFixed(1)}%</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="fill" style="width: ${Math.min(value, 100)}%"></div>
+                  ${national ? `<div class="marker" style="left: ${Math.min(national, 100)}%"></div>` : ''}
+                </div>
+                ${comp ? `<div class="text-xs mt-1 ${comp.interpretation?.includes('higher') ? 'text-amber-600' : comp.interpretation?.includes('lower') ? 'text-green-600' : 'text-zinc-500'}">${comp.interpretation?.includes('significantly_higher') ? '↑ Significantly higher' : comp.interpretation?.includes('higher') ? '↑ Higher' : comp.interpretation?.includes('lower') ? '↓ Lower' : '≈ Similar'}</div>` : ''}
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    async function renderProfileProcedures() {
+      if (!selectedPhysician) return;
+      document.getElementById('profileContent').innerHTML = `<div class="flex justify-center py-12"><div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>`;
+      try {
+        const res = await fetch(`/api/services?npi=${selectedPhysician.npi}&year=${currentYear}&limit=20`);
+        const data = await res.json();
+        if (data.success && data.services?.length > 0) {
+          document.getElementById('profileContent').innerHTML = `
+            <div class="space-y-2">
+              <p class="text-sm text-zinc-500 mb-3">Top procedures by volume</p>
+              ${data.services.slice(0, 10).map(s => `
+                <div class="flex items-center justify-between py-2.5 border-b border-black/5">
+                  <div>
+                    <span class="font-mono bg-zinc-100 px-2 py-0.5 rounded text-sm text-zinc-700">${s.hcpcsCode || s.HCPCS_Cd}</span>
+                    <div class="text-xs text-zinc-500 mt-1">${s.hcpcsDescription || s.HCPCS_Desc || 'No description'}</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="font-medium text-zinc-800">${formatNumber(s.services || s.Tot_Srvcs)}</div>
+                    <div class="text-xs text-zinc-400">${formatNumber(s.beneficiaries || s.Tot_Benes)} benes</div>
+                  </div>
+                </div>`).join('')}
+            </div>`;
+        } else document.getElementById('profileContent').innerHTML = `<div class="text-center py-12 text-zinc-500">No procedure data</div>`;
+      } catch (err) {
+        document.getElementById('profileContent').innerHTML = `<div class="p-4 bg-red-50 rounded-lg text-red-600 text-sm">${err.message}</div>`;
+      }
+    }
+
+    async function renderProfilePrescribing() {
+      if (!selectedPhysician) return;
+      document.getElementById('profileContent').innerHTML = `<div class="flex justify-center py-12"><div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div></div>`;
+      try {
+        const res = await fetch(`/api/prescribers/${selectedPhysician.npi}?year=${currentYear}`);
+        const data = await res.json();
+        if (data.success && data.found && data.prescriber) {
+          const rx = data.prescriber;
+          document.getElementById('profileContent').innerHTML = `
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div class="stat-card rounded-lg p-4"><div class="text-xs text-zinc-500 mb-1">Total Claims</div><div class="text-2xl font-bold text-zinc-800">${formatNumber(rx.totalClaims)}</div></div>
+                <div class="stat-card rounded-lg p-4"><div class="text-xs text-zinc-500 mb-1">Drug Cost</div><div class="text-2xl font-bold text-zinc-800">$${formatNumber(rx.totalDrugCost)}</div></div>
+              </div>
+              <div class="bg-white border border-black/5 rounded-lg p-4">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                  <div><div class="text-zinc-400 text-xs">Beneficiaries</div><div class="font-medium text-zinc-700">${formatNumber(rx.totalBeneficiaries)}</div></div>
+                  <div><div class="text-zinc-400 text-xs">Avg Claims/Bene</div><div class="font-medium text-zinc-700">${(rx.totalClaims / rx.totalBeneficiaries).toFixed(1)}</div></div>
+                </div>
+              </div>
+              <div class="p-3 bg-amber-50 rounded-lg text-xs text-amber-700">⚠️ Part D = outpatient pharmacy only</div>
+            </div>`;
+        } else document.getElementById('profileContent').innerHTML = `<div class="text-center py-12 text-zinc-500"><div class="text-3xl mb-2">💊</div>No Part D data</div>`;
+      } catch (err) {
+        document.getElementById('profileContent').innerHTML = `<div class="p-4 bg-red-50 rounded-lg text-red-600 text-sm">${err.message}</div>`;
+      }
+    }
+
+    // COMPARE
+    function toggleCompareMode() {
+      compareMode = !compareMode;
+      const btn = document.getElementById('compareModeBtn');
+      if (compareMode) {
+        btn.classList.add('btn-primary'); btn.classList.remove('btn-secondary');
+        document.getElementById('compareModeText').textContent = 'Comparing';
+        document.getElementById('comparisonBar').classList.remove('hidden');
+      } else {
+        btn.classList.remove('btn-primary'); btn.classList.add('btn-secondary');
+        document.getElementById('compareModeText').textContent = 'Compare';
+        document.getElementById('comparisonBar').classList.add('hidden');
+        compareList = [];
+      }
+      renderPhysicians();
+      updateCompareBar();
+    }
+
+    function toggleCompare(npi, name) {
+      const idx = compareList.findIndex(c => c.npi === npi);
+      if (idx >= 0) compareList.splice(idx, 1);
+      else if (compareList.length < 4) compareList.push({ npi, name });
+      else { showToast('Maximum 4 physicians', 'warning'); return; }
+      updateCompareBar();
+      renderPhysicians();
+    }
+
+    function updateCompareBar() {
+      document.getElementById('compareCount').textContent = `${compareList.length} selected`;
+      document.getElementById('comparePreview').innerHTML = compareList.map(c => `<span class="badge badge-info">${c.name.split(',')[0]}</span>`).join('');
+    }
+
+    function clearComparison() { compareList = []; updateCompareBar(); renderPhysicians(); }
+
+    async function viewComparison() {
+      if (compareList.length < 2) { showToast('Select at least 2 physicians', 'warning'); return; }
+      document.getElementById('resultsView').classList.add('hidden');
+      document.getElementById('comparisonPanel').classList.remove('hidden');
+      const profiles = await Promise.all(compareList.map(async c => {
+        const res = await fetch(`/api/physicians/${c.npi}/compared?year=${currentYear}`);
+        const data = await res.json();
+        return data.success ? { ...data.profile, comparisons: data.comparisons } : null;
+      }));
+      renderComparisonTable(profiles.filter(p => p));
+    }
+
+    function renderComparisonTable(profiles) {
+      const metrics = [
+        { key: 'totalBeneficiaries', label: 'Beneficiaries', format: formatNumber },
+        { key: 'totalServices', label: 'Services', format: formatNumber },
+        { key: 'avgRiskScore', label: 'Risk Score', format: v => v?.toFixed(2) || '-' },
+        { key: 'chronicConditions.ckd', label: 'CKD %', format: v => v ? v.toFixed(1) + '%' : '-' },
+        { key: 'chronicConditions.diabetes', label: 'Diabetes %', format: v => v ? v.toFixed(1) + '%' : '-' },
+      ];
+      document.getElementById('comparisonContent').innerHTML = `
+        <div class="data-table rounded-lg overflow-hidden">
+          <table class="w-full">
+            <thead><tr>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Metric</th>
+              ${profiles.map(p => `<th class="px-4 py-3 text-center"><div class="font-semibold text-zinc-800">${p.fullName || p.lastName}</div><div class="text-xs text-zinc-500 font-normal">${p.specialty}</div></th>`).join('')}
+            </tr></thead>
+            <tbody>
+              ${metrics.map(m => `<tr>
+                <td class="px-4 py-3 text-sm text-zinc-600">${m.label}</td>
+                ${profiles.map(p => {
+                  const value = m.key.includes('.') ? m.key.split('.').reduce((o, k) => o?.[k], p) : p[m.key];
+                  return `<td class="px-4 py-3 text-center font-medium text-zinc-800">${m.format(value)}</td>`;
+                }).join('')}
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    function closeComparison() {
+      document.getElementById('comparisonPanel').classList.add('hidden');
+      document.getElementById('resultsView').classList.remove('hidden');
+    }
+
+    // Region definitions
+const US_REGIONS = {
+  northeast: ['CT', 'DE', 'MA', 'MD', 'ME', 'NH', 'NJ', 'NY', 'PA', 'RI', 'VT', 'DC'],
+  southeast: ['AL', 'AR', 'FL', 'GA', 'KY', 'LA', 'MS', 'NC', 'SC', 'TN', 'VA', 'WV'],
+  midwest: ['IA', 'IL', 'IN', 'KS', 'MI', 'MN', 'MO', 'ND', 'NE', 'OH', 'SD', 'WI'],
+  southwest: ['AZ', 'NM', 'OK', 'TX'],
+  west: ['AK', 'CA', 'CO', 'HI', 'ID', 'MT', 'NV', 'OR', 'UT', 'WA', 'WY']
+};
+
+let selectedStates = [];
+
+function selectRegion(region) {
+  // Toggle region button
+  const btn = document.querySelector(`[data-region="${region}"]`);
+  const isActive = btn?.classList.contains('active');
+  
+  // Clear all region buttons
+  document.querySelectorAll('[data-region]').forEach(b => b.classList.remove('active'));
+  
+  if (!isActive) {
+    btn?.classList.add('active');
+    selectedStates = [...US_REGIONS[region]];
+  } else {
+    selectedStates = [];
+  }
+  
+  renderSelectedStates();
+  applyFilters();
+}
+
+function addStateFilter() {
+  const select = document.getElementById('stateFilter');
+  const state = select.value;
+  
+  if (state && !selectedStates.includes(state)) {
+    selectedStates.push(state);
+    renderSelectedStates();
+    // Clear region buttons if manually adding states
+    document.querySelectorAll('[data-region]').forEach(b => b.classList.remove('active'));
+  }
+  
+  select.value = '';
+}
+
+function removeStateFilter(state) {
+  selectedStates = selectedStates.filter(s => s !== state);
+  renderSelectedStates();
+  document.querySelectorAll('[data-region]').forEach(b => b.classList.remove('active'));
+  applyFilters();
+}
+
+function renderSelectedStates() {
+  const container = document.getElementById('selectedStates');
+  if (!container) return;
+  
+  if (selectedStates.length === 0) {
+    container.innerHTML = '<span class="text-xs text-gray-400">No states selected (showing all)</span>';
+  } else {
+    container.innerHTML = selectedStates.map(state => `
+      <span class="state-chip active">
+        ${state}
+        <span class="remove" onclick="event.stopPropagation(); removeStateFilter('${state}')">&times;</span>
+      </span>
+    `).join('');
+  }
+  
+  updateFilterChips();
+}
+
+function updateBeneSlider() {
+  const slider = document.getElementById('minBeneSlider');
+  const input = document.getElementById('minBeneFilter');
+  if (slider && input) {
+    input.value = slider.value;
+  }
+}
+
+function updateFilterChips() {
+  const container = document.getElementById('filterChipsContainer');
+  const wrapper = document.getElementById('activeFiltersChips');
+  if (!container || !wrapper) return;
+  
+  const chips = [];
+  
+  if (selectedStates.length > 0) {
+    const label = selectedStates.length <= 3 
+      ? selectedStates.join(', ') 
+      : `${selectedStates.length} states`;
+    chips.push({ label: `📍 ${label}`, type: 'states' });
+  }
+  
+  const specialty = document.getElementById('specialtyFilter')?.value;
+  if (specialty) {
+    chips.push({ label: `🩺 ${specialty}`, type: 'specialty' });
+  }
+  
+  const minBene = document.getElementById('minBeneFilter')?.value;
+  if (minBene && minBene !== '50') {
+    chips.push({ label: `≥${minBene} benes`, type: 'bene' });
+  }
+  
+  if (chips.length > 0) {
+    wrapper.classList.remove('hidden');
+    container.innerHTML = chips.map(chip => `
+      <span class="state-chip active text-xs">${chip.label}</span>
+    `).join('');
+  } else {
+    wrapper.classList.add('hidden');
+  }
+  
+  // Update badge count
+  const badge = document.getElementById('filterCountBadge');
+  if (badge) {
+    badge.textContent = chips.length || '';
+    badge.classList.toggle('hidden', chips.length === 0);
+  }
+}
+
+// Override buildFilterParams to use selectedStates
+const originalBuildFilterParams = buildFilterParams;
+buildFilterParams = function() {
+  const params = originalBuildFilterParams ? originalBuildFilterParams() : {};
+  
+  // Use selected states array if any
+  if (selectedStates.length > 0) {
+    params.states = selectedStates;
+    params.state = selectedStates[0]; // For single-state API compatibility
+  }
+  
+  // Sync slider with input
+  const slider = document.getElementById('minBeneSlider');
+  const input = document.getElementById('minBeneFilter');
+  if (slider && input) {
+    slider.value = input.value;
+  }
+  
+  return params;
+};
+
+// Override resetFilters
+const originalResetFilters = resetFilters;
+resetFilters = function() {
+  selectedStates = [];
+  document.querySelectorAll('[data-region]').forEach(b => b.classList.remove('active'));
+  renderSelectedStates();
+  
+  document.getElementById('minBeneSlider').value = 50;
+  document.getElementById('minBeneFilter').value = 50;
+  document.getElementById('specialtyFilter').value = '';
+  document.getElementById('minRiskFilter').value = '';
+  document.getElementById('maxRiskFilter').value = '';
+  document.getElementById('minCKDFilter').value = '';
+  document.getElementById('maxCKDFilter').value = '';
+  
+  updateFilterChips();
+  
+  if (currentPhysicians.length > 0) {
+    applyFilters();
+  }
+};
+
+
+    // MAP
+    const stateCentroids = {
+      'AL': [32.806671, -86.791130], 'AK': [61.370716, -152.404419], 'AZ': [33.729759, -111.431221],
+      'AR': [34.969704, -92.373123], 'CA': [36.116203, -119.681564], 'CO': [39.059811, -105.311104],
+      'CT': [41.597782, -72.755371], 'DE': [39.318523, -75.507141], 'DC': [38.897438, -77.026817],
+      'FL': [27.766279, -81.686783], 'GA': [33.040619, -83.643074], 'HI': [21.094318, -157.498337],
+      'ID': [44.240459, -114.478828], 'IL': [40.349457, -88.986137], 'IN': [39.849426, -86.258278],
+      'IA': [42.011539, -93.210526], 'KS': [38.526600, -96.726486], 'KY': [37.668140, -84.670067],
+      'LA': [31.169546, -91.867805], 'ME': [44.693947, -69.381927], 'MD': [39.063946, -76.802101],
+      'MA': [42.230171, -71.530106], 'MI': [43.326618, -84.536095], 'MN': [45.694454, -93.900192],
+      'MS': [32.741646, -89.678696], 'MO': [38.456085, -92.288368], 'MT': [46.921925, -110.454353],
+      'NE': [41.125370, -98.268082], 'NV': [38.313515, -117.055374], 'NH': [43.452492, -71.563896],
+      'NJ': [40.298904, -74.521011], 'NM': [34.840515, -106.248482], 'NY': [42.165726, -74.948051],
+      'NC': [35.630066, -79.806419], 'ND': [47.528912, -99.784012], 'OH': [40.388783, -82.764915],
+      'OK': [35.565342, -96.928917], 'OR': [44.572021, -122.070938], 'PA': [40.590752, -77.209755],
+      'PR': [18.220833, -66.590149], 'RI': [41.680893, -71.511780], 'SC': [33.856892, -80.945007],
+      'SD': [44.299782, -99.438828], 'TN': [35.747845, -86.692345], 'TX': [31.054487, -97.563461],
+      'UT': [40.150032, -111.862434], 'VT': [44.045876, -72.710686], 'VA': [37.769337, -78.169968],
+      'WA': [47.400902, -121.490494], 'WV': [38.491226, -80.954453], 'WI': [44.268543, -89.616508],
+      'WY': [42.755966, -107.302490]
+    };
+
+    function toggleMapView() {
+      const container = document.getElementById('mapViewContainer');
+      const btn = document.getElementById('mapSidebarBtn');
+      if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        btn.classList.add('active');
+        setTimeout(() => {
+          initMap();
+          plotPhysiciansOnMap();
+        }, 100);
+      } else {
+        container.classList.add('hidden');
+        btn.classList.remove('active');
+      }
+    }
+
+function initMap() {
+  if (map) { map.remove(); map = null; }
+  
+  map = L.map('mapContainer', {
+    center: US_CENTER,
+    zoom: 4,
+    minZoom: 3,
+    maxZoom: 8,
+    maxBounds: [
+      [15, -135],  // Southwest - extended slightly for better UX
+      [55, -55]    // Northeast
+    ],
+    maxBoundsViscosity: 1.0  // Prevents dragging outside bounds
+  });
+  
+  // Light map tiles
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO',
+    subdomains: 'abcd'
+  }).addTo(map);
+  
+  markers = [];
+  
+  // Fit to US bounds
+  map.fitBounds(US_BOUNDS, { padding: [20, 20] });
+}
+
+    function plotPhysiciansOnMap() {
+      if (!map || !currentPhysicians || currentPhysicians.length === 0) {
+        showToast('No data to display on map', 'warning');
+        return;
+      }
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+      const bounds = L.latLngBounds();
+      let plotted = 0;
+      const toPlot = currentPhysicians.slice(0, 100);
+      for (const p of toPlot) {
+        const state = p.state || p.location?.state || '';
+        if (!state || !stateCentroids[state]) continue;
+        const coords = [
+          stateCentroids[state][0] + (Math.random() - 0.5) * 0.8,
+          stateCentroids[state][1] + (Math.random() - 0.5) * 0.8
+        ];
+        const name = p.fullName || p.name || p.providerName || 'Unknown';
+        const specialty = p.specialty || '';
+        const benes = p.totalBeneficiaries || p.beneficiaries || 0;
+        const npi = p.npi || '';
+        const icon = L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="width:12px;height:12px;background:linear-gradient(135deg,#e8a0c0,#b0a8d8);border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.2);"></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+        });
+        const marker = L.marker(coords, { icon });
+        marker.bindPopup(`<div style="font-family:DM Sans,sans-serif;min-width:160px;"><strong>${name}</strong><br><span style="color:#666;font-size:12px;">${specialty}</span><br><span style="font-size:12px;">📍 ${state} • ${formatNumber(benes)} benes</span><br><button onclick="openProfile('${npi}')" style="margin-top:8px;padding:4px 12px;background:linear-gradient(135deg,#e8a0c0,#b0a8d8);color:white;border:none;border-radius:4px;font-size:12px;cursor:pointer;">View</button></div>`);
+        markers.push(marker);
+        marker.addTo(map);
+        bounds.extend(coords);
+        plotted++;
+      }
+      if (plotted > 0) {
+        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 6 });
+        showToast(`${plotted} physicians on map`, 'success');
+      }
+    }
+
+    // UTILS
+    function updateYear() {
+      currentYear = document.getElementById('yearSelect').value;
+      document.getElementById('dataSourceInfo').textContent = `CMS Medicare PUF ${currentYear}`;
+      if (currentPhysicians.length > 0) applyFilters();
+    }
+
+    function changeSortOrder() { currentSortBy = document.getElementById('sortSelect').value; currentPage = 1; applyFilters(); }
+    function updatePagination() {
+      const totalPages = Math.ceil(totalResults / pageSize);
+      document.getElementById('pageInfo').textContent = `Page ${currentPage}/${Math.max(totalPages, 1)}`;
+      document.getElementById('prevBtn').disabled = currentPage <= 1;
+      document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+    }
+    function prevPage() { if (currentPage > 1) { currentPage--; performSearch(); } }
+    function nextPage() { const totalPages = Math.ceil(totalResults / pageSize); if (currentPage < totalPages) { currentPage++; performSearch(); } }
+    function toggleExportMenu() { document.getElementById('exportMenu').classList.toggle('show'); }
+
+    async function exportData(format) {
+      document.getElementById('exportMenu').classList.remove('show');
+      if (currentPhysicians.length === 0) { showToast('No data to export', 'warning'); return; }
+      const params = new URLSearchParams({ ...currentSearchParams, format, year: currentYear, limit: 500 });
+      if (currentSearchParams.indicationId) params.set('indication', currentSearchParams.indicationId);
+      window.location.href = `/api/export/physicians?${params.toString()}`;
+      showToast(`Exporting ${format.toUpperCase()}...`, 'success');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = { error: 'bg-red-500', warning: 'bg-amber-500', success: 'bg-green-500', info: 'bg-purple-500' };
+      toast.className = `toast ${colors[type] || colors.info} text-white px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#exportMenu') && !e.target.closest('[onclick*="toggleExportMenu"]')) {
+    document.getElementById('exportMenu')?.classList.remove('show');
+  }
+  if (!e.target.closest('#filtersDropdown') && !e.target.closest('#filtersDropdownBtn')) {
+    document.getElementById('filtersDropdown')?.classList.remove('show');
+  }
+});
+
+    updateModeSpecificFilters('indication');
+  </script>
+</body>
+</html>
